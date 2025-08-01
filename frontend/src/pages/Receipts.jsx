@@ -1,0 +1,535 @@
+import { useState, useEffect } from 'react';
+import Header from '../components/common/Header';
+import { receiptAPI } from '../services/api';
+import Modal from '../components/common/Modal';
+import Loader from '../components/common/Loader';
+
+const Receipts = () => {
+  const [receipts, setReceipts] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState('');
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [selectedReceipt, setSelectedReceipt] = useState(null);
+  const [extractedData, setExtractedData] = useState(null);
+  const [processingReceipt, setProcessingReceipt] = useState(null);
+
+  // File upload state
+  const [dragActive, setDragActive] = useState(false);
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [filePreview, setFilePreview] = useState(null);
+
+  useEffect(() => {
+    fetchReceipts();
+  }, []);
+
+  const fetchReceipts = async () => {
+    try {
+      setLoading(true);
+      const response = await receiptAPI.getAll();
+      setReceipts(response.data.receipts || []);
+    } catch (error) {
+      setError(error.message || 'Failed to fetch receipts');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDrag = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === "dragenter" || e.type === "dragover") {
+      setDragActive(true);
+    } else if (e.type === "dragleave") {
+      setDragActive(false);
+    }
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+    
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      handleFileSelect(e.dataTransfer.files[0]);
+    }
+  };
+
+  const handleFileSelect = (file) => {
+    // Validate file type
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'application/pdf'];
+    if (!allowedTypes.includes(file.type)) {
+      setError('Please select a valid file (JPEG, PNG, or PDF)');
+      return;
+    }
+
+    // Validate file size (5MB limit)
+    if (file.size > 5 * 1024 * 1024) {
+      setError('File size must be less than 5MB');
+      return;
+    }
+
+    setSelectedFile(file);
+    setError('');
+
+    // Create preview for images
+    if (file.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setFilePreview(e.target.result);
+      };
+      reader.readAsDataURL(file);
+    } else {
+      setFilePreview(null);
+    }
+  };
+
+  const handleUpload = async () => {
+    if (!selectedFile) {
+      setError('Please select a file to upload');
+      return;
+    }
+
+    try {
+      setUploading(true);
+      setError('');
+
+      const formData = new FormData();
+      formData.append('receipt', selectedFile);
+
+      const response = await receiptAPI.upload(formData);
+      
+      // Reset form
+      setSelectedFile(null);
+      setFilePreview(null);
+      
+      // Refresh receipts list
+      await fetchReceipts();
+      
+      // Show success message
+      alert('Receipt uploaded successfully! Processing with OCR...');
+      
+    } catch (error) {
+      setError(error.message || 'Failed to upload receipt');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handlePreview = async (receipt) => {
+    try {
+      setSelectedReceipt(receipt);
+      setShowPreviewModal(true);
+      
+      // Fetch extracted data if available
+      if (receipt.extractedData) {
+        setExtractedData(receipt.extractedData);
+      } else {
+        setExtractedData(null);
+      }
+    } catch (error) {
+      setError(error.message || 'Failed to load receipt details');
+    }
+  };
+
+  const handleProcessOCR = async (receiptId) => {
+    try {
+      setProcessingReceipt(receiptId);
+      setError('');
+
+      const response = await receiptAPI.processOCR(receiptId);
+      setExtractedData(response.data.extractedData);
+      
+      // Update the receipt in the list
+      setReceipts(prev => prev.map(r => 
+        r._id === receiptId 
+          ? { ...r, extractedData: response.data.extractedData }
+          : r
+      ));
+
+    } catch (error) {
+      setError(error.message || 'Failed to process OCR');
+    } finally {
+      setProcessingReceipt(null);
+    }
+  };
+
+  const handleCreateTransaction = async (extractedData) => {
+    try {
+      // This would typically navigate to the transactions page with pre-filled data
+      // For now, we'll show an alert
+      alert('Transaction creation feature will be implemented. Extracted data: ' + JSON.stringify(extractedData, null, 2));
+    } catch (error) {
+      setError(error.message || 'Failed to create transaction');
+    }
+  };
+
+  const handleDeleteReceipt = async (receiptId) => {
+    if (window.confirm('Are you sure you want to delete this receipt?')) {
+      try {
+        await receiptAPI.delete(receiptId);
+        await fetchReceipts();
+      } catch (error) {
+        setError(error.message || 'Failed to delete receipt');
+      }
+    }
+  };
+
+  const formatFileSize = (bytes) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  const formatDate = (date) => {
+    return new Date(date).toLocaleDateString('en-IN');
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Header />
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <Loader size="lg" text="Loading receipts..." />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <Header />
+      
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Header */}
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Receipts</h1>
+          <p className="text-gray-600">
+            Upload and process receipts with OCR technology
+          </p>
+        </div>
+
+        {/* Error Message */}
+        {error && (
+          <div className="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+            {error}
+          </div>
+        )}
+
+        {/* Upload Section */}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-8">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Upload Receipt</h3>
+          
+          <div
+            className={`border-2 border-dashed rounded-lg p-8 text-center ${
+              dragActive ? 'border-red-400 bg-red-50' : 'border-gray-300'
+            }`}
+            onDragEnter={handleDrag}
+            onDragLeave={handleDrag}
+            onDragOver={handleDrag}
+            onDrop={handleDrop}
+          >
+            {!selectedFile ? (
+              <div>
+                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <span className="text-2xl">📄</span>
+                </div>
+                <h3 className="text-lg font-medium text-gray-900 mb-2">
+                  Drop your receipt here
+                </h3>
+                <p className="text-gray-600 mb-4">
+                  or click to browse files
+                </p>
+                <input
+                  type="file"
+                  accept=".jpg,.jpeg,.png,.pdf"
+                  onChange={(e) => e.target.files[0] && handleFileSelect(e.target.files[0])}
+                  className="hidden"
+                  id="file-upload"
+                />
+                <label
+                  htmlFor="file-upload"
+                  className="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 font-medium cursor-pointer"
+                >
+                  Choose File
+                </label>
+                <p className="text-xs text-gray-500 mt-2">
+                  Supported formats: JPEG, PNG, PDF (Max 5MB)
+                </p>
+              </div>
+            ) : (
+              <div>
+                {filePreview ? (
+                  <div className="mb-4">
+                    <img 
+                      src={filePreview} 
+                      alt="Preview" 
+                      className="max-w-xs mx-auto rounded border"
+                    />
+                  </div>
+                ) : (
+                  <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <span className="text-2xl">📄</span>
+                  </div>
+                )}
+                <h3 className="text-lg font-medium text-gray-900 mb-2">
+                  {selectedFile.name}
+                </h3>
+                <p className="text-gray-600 mb-4">
+                  Size: {formatFileSize(selectedFile.size)}
+                </p>
+                <div className="flex space-x-3 justify-center">
+                  <button
+                    onClick={handleUpload}
+                    disabled={uploading}
+                    className="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 font-medium disabled:opacity-50"
+                  >
+                    {uploading ? 'Uploading...' : 'Upload Receipt'}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setSelectedFile(null);
+                      setFilePreview(null);
+                    }}
+                    className="bg-gray-200 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-300 font-medium"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Receipts List */}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+          <div className="px-6 py-4 border-b border-gray-200">
+            <h2 className="text-lg font-semibold text-gray-900">
+              Uploaded Receipts ({receipts.length})
+            </h2>
+          </div>
+
+          {receipts.length === 0 ? (
+            <div className="p-8 text-center">
+              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <span className="text-2xl">📄</span>
+              </div>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No receipts uploaded</h3>
+              <p className="text-gray-600 mb-4">
+                Upload your first receipt to get started with OCR processing
+              </p>
+            </div>
+          ) : (
+            <div className="divide-y divide-gray-200">
+              {receipts.map((receipt) => (
+                <div key={receipt._id} className="p-6 hover:bg-gray-50">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-4">
+                      <div className="w-12 h-12 bg-gray-100 rounded flex items-center justify-center">
+                        <span className="text-xl">
+                          {receipt.filename.endsWith('.pdf') ? '📄' : '🖼️'}
+                        </span>
+                      </div>
+                      <div>
+                        <h3 className="font-medium text-gray-900">
+                          {receipt.filename}
+                        </h3>
+                        <p className="text-sm text-gray-600">
+                          Uploaded: {formatDate(receipt.uploadDate)}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          Size: {formatFileSize(receipt.fileSize)}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-4">
+                      <div className="text-right">
+                        <div className="flex items-center space-x-2">
+                          {receipt.extractedData ? (
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                              ✅ Processed
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                              ⏳ Pending
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() => handlePreview(receipt)}
+                          className="text-blue-600 hover:text-blue-700 text-sm font-medium"
+                        >
+                          Preview
+                        </button>
+                        {!receipt.extractedData && (
+                          <button
+                            onClick={() => handleProcessOCR(receipt._id)}
+                            disabled={processingReceipt === receipt._id}
+                            className="text-green-600 hover:text-green-700 text-sm font-medium disabled:opacity-50"
+                          >
+                            {processingReceipt === receipt._id ? 'Processing...' : 'Process OCR'}
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleDeleteReceipt(receipt._id)}
+                          className="text-red-600 hover:text-red-700 text-sm font-medium"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Receipt Preview Modal */}
+      <Modal
+        isOpen={showPreviewModal}
+        onClose={() => {
+          setShowPreviewModal(false);
+          setSelectedReceipt(null);
+          setExtractedData(null);
+        }}
+        title="Receipt Details"
+      >
+        {selectedReceipt && (
+          <div className="space-y-6">
+            {/* Receipt Image/File */}
+            <div>
+              <h4 className="text-sm font-medium text-gray-700 mb-2">Receipt File</h4>
+              <div className="bg-gray-50 rounded-lg p-4">
+                <div className="flex items-center space-x-3">
+                  <div className="w-10 h-10 bg-gray-200 rounded flex items-center justify-center">
+                    <span className="text-lg">
+                      {selectedReceipt.filename.endsWith('.pdf') ? '📄' : '🖼️'}
+                    </span>
+                  </div>
+                  <div>
+                    <p className="font-medium text-gray-900">{selectedReceipt.filename}</p>
+                    <p className="text-sm text-gray-600">
+                      Size: {formatFileSize(selectedReceipt.fileSize)} | 
+                      Uploaded: {formatDate(selectedReceipt.uploadDate)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* OCR Processing Section */}
+            <div>
+              <h4 className="text-sm font-medium text-gray-700 mb-2">OCR Processing</h4>
+              {!selectedReceipt.extractedData ? (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                  <div className="flex items-center space-x-2 mb-2">
+                    <span className="text-yellow-600">⚠️</span>
+                    <span className="text-sm font-medium text-yellow-800">Not Processed</span>
+                  </div>
+                  <p className="text-sm text-yellow-700 mb-3">
+                    This receipt hasn't been processed with OCR yet.
+                  </p>
+                  <button
+                    onClick={() => handleProcessOCR(selectedReceipt._id)}
+                    disabled={processingReceipt === selectedReceipt._id}
+                    className="bg-yellow-600 text-white px-3 py-1 rounded text-sm font-medium hover:bg-yellow-700 disabled:opacity-50"
+                  >
+                    {processingReceipt === selectedReceipt._id ? 'Processing...' : 'Process OCR'}
+                  </button>
+                </div>
+              ) : (
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                  <div className="flex items-center space-x-2 mb-2">
+                    <span className="text-green-600">✅</span>
+                    <span className="text-sm font-medium text-green-800">Processed</span>
+                  </div>
+                  <p className="text-sm text-green-700">
+                    OCR processing completed successfully.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Extracted Data */}
+            {extractedData && (
+              <div>
+                <h4 className="text-sm font-medium text-gray-700 mb-2">Extracted Information</h4>
+                <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+                  {extractedData.amount && (
+                    <div className="flex justify-between">
+                      <span className="text-sm font-medium text-gray-700">Amount:</span>
+                      <span className="text-sm text-gray-900 font-semibold">
+                        ₹{extractedData.amount}
+                      </span>
+                    </div>
+                  )}
+                  {extractedData.merchant && (
+                    <div className="flex justify-between">
+                      <span className="text-sm font-medium text-gray-700">Merchant:</span>
+                      <span className="text-sm text-gray-900">{extractedData.merchant}</span>
+                    </div>
+                  )}
+                  {extractedData.date && (
+                    <div className="flex justify-between">
+                      <span className="text-sm font-medium text-gray-700">Date:</span>
+                      <span className="text-sm text-gray-900">{extractedData.date}</span>
+                    </div>
+                  )}
+                  {extractedData.items && extractedData.items.length > 0 && (
+                    <div>
+                      <span className="text-sm font-medium text-gray-700">Items:</span>
+                      <ul className="mt-1 space-y-1">
+                        {extractedData.items.map((item, index) => (
+                          <li key={index} className="text-sm text-gray-900 ml-4">
+                            • {item}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {extractedData.rawText && (
+                    <div>
+                      <span className="text-sm font-medium text-gray-700">Raw Text:</span>
+                      <div className="mt-1 p-2 bg-white border rounded text-xs text-gray-600 max-h-20 overflow-y-auto">
+                        {extractedData.rawText}
+                      </div>
+                    </div>
+                  )}
+                </div>
+                
+                {/* Create Transaction Button */}
+                <div className="mt-4">
+                  <button
+                    onClick={() => handleCreateTransaction(extractedData)}
+                    className="w-full bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 font-medium"
+                  >
+                    Create Transaction from Receipt
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Help Section */}
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <h4 className="text-sm font-medium text-blue-900 mb-2">💡 How it works</h4>
+              <ul className="text-xs text-blue-800 space-y-1">
+                <li>• Upload receipt images (JPEG, PNG) or PDF files</li>
+                <li>• OCR technology extracts text and data automatically</li>
+                <li>• Review extracted information and create transactions</li>
+                <li>• Supported file formats: JPEG, PNG, PDF (max 5MB)</li>
+              </ul>
+            </div>
+          </div>
+        )}
+      </Modal>
+    </div>
+  );
+};
+
+export default Receipts; 

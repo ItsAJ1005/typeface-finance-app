@@ -63,6 +63,22 @@ router.post('/', auth, transactionValidation, async (req, res) => {
 
   } catch (error) {
     console.error('Create transaction error:', error);
+    
+    // Handle Mongoose validation errors
+    if (error.name === 'ValidationError') {
+      const validationErrors = Object.keys(error.errors).map(key => ({
+        field: key,
+        message: error.errors[key].message
+      }));
+      
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: validationErrors
+      });
+    }
+    
+    // Handle other errors
     res.status(500).json({
       success: false,
       message: 'Failed to create transaction'
@@ -201,6 +217,22 @@ router.put('/:id', auth, transactionValidation, async (req, res) => {
 
   } catch (error) {
     console.error('Update transaction error:', error);
+    
+    // Handle Mongoose validation errors
+    if (error.name === 'ValidationError') {
+      const validationErrors = Object.keys(error.errors).map(key => ({
+        field: key,
+        message: error.errors[key].message
+      }));
+      
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: validationErrors
+      });
+    }
+    
+    // Handle other errors
     res.status(500).json({
       success: false,
       message: 'Failed to update transaction'

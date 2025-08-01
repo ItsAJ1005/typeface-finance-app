@@ -35,7 +35,10 @@ const Transactions = () => {
     amount: '',
     category: '',
     description: '',
-    date: new Date().toISOString().split('T')[0]
+    date: (() => {
+      const today = new Date();
+      return today.toISOString().split('T')[0];
+    })()
   });
 
   const categories = {
@@ -98,8 +101,20 @@ const Transactions = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Frontend validation
+    const selectedDate = new Date(formData.date);
+    const today = new Date();
+    today.setHours(23, 59, 59, 999); // End of today
+    
+    if (selectedDate > today) {
+      setError('Transaction date cannot be in the future');
+      return;
+    }
+    
     try {
       setLoading(true);
+      setError(''); // Clear previous errors
       
       if (showEditModal && selectedTransaction) {
         await transactionAPI.update(selectedTransaction._id, formData);
@@ -113,7 +128,13 @@ const Transactions = () => {
       resetForm();
       fetchTransactions();
     } catch (error) {
-      setError(error.message || 'Failed to save transaction');
+      // Handle validation errors from backend
+      if (error.errors && Array.isArray(error.errors)) {
+        const errorMessages = error.errors.map(err => `${err.field}: ${err.message}`).join(', ');
+        setError(errorMessages);
+      } else {
+        setError(error.message || 'Failed to save transaction');
+      }
     } finally {
       setLoading(false);
     }
@@ -143,12 +164,15 @@ const Transactions = () => {
   };
 
   const resetForm = () => {
+    const today = new Date();
+    const todayString = today.toISOString().split('T')[0];
+    
     setFormData({
       type: 'expense',
       amount: '',
       category: '',
       description: '',
-      date: new Date().toISOString().split('T')[0]
+      date: todayString
     });
   };
 
@@ -463,6 +487,7 @@ const Transactions = () => {
               <input
                 type="date"
                 value={formData.date}
+                max={new Date().toISOString().split('T')[0]}
                 onChange={(e) => setFormData({...formData, date: e.target.value})}
                 className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-red-500 focus:border-red-500"
                 required

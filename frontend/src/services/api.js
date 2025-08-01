@@ -123,9 +123,11 @@ export const receiptAPI = {
     });
   },
   
-  process: (receiptId) => api.post(`/receipts/${receiptId}/process`),
+  getAll: () => api.get('/receipts'),
   
   getById: (id) => api.get(`/receipts/${id}`),
+  
+  processOCR: (receiptId) => api.post(`/receipts/${receiptId}/process-ocr`),
   
   delete: (id) => api.delete(`/receipts/${id}`),
 };

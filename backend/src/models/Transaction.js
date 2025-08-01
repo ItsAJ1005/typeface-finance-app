@@ -64,12 +64,12 @@ const transactionSchema = new mongoose.Schema({
     index: true,
     validate: {
       validator: function(v) {
-        // Don't allow future dates beyond tomorrow
-        const tomorrow = new Date();
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        return v <= tomorrow;
+        // Allow dates up to 1 year in the future for planning purposes
+        const oneYearFromNow = new Date();
+        oneYearFromNow.setFullYear(oneYearFromNow.getFullYear() + 1);
+        return v <= oneYearFromNow;
       },
-      message: 'Transaction date cannot be in the future'
+      message: 'Transaction date cannot be more than 1 year in the future'
     }
   },
   receiptId: {
