@@ -99,9 +99,19 @@ const Login = ({ setIsAuth }) => {
             <button
               onClick={handleDemoLogin}
               disabled={loading}
-              className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50"
+              className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 transition-colors duration-200"
             >
-              {loading ? 'Signing in...' : '🚀 Quick Demo Login'}
+              {loading ? (
+                <div className="flex items-center">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  Signing in...
+                </div>
+              ) : (
+                <div className="flex items-center">
+                  <span className="mr-2">🚀</span>
+                  Quick Demo Login
+                </div>
+              )}
             </button>
             <p className="mt-2 text-xs text-gray-500 text-center">
               Use demo credentials for quick evaluation
@@ -211,8 +221,6 @@ const Login = ({ setIsAuth }) => {
             <ul className="text-xs text-blue-800 space-y-1">
               <li>• <strong>Demo Login:</strong> Use the green button above for quick testing</li>
               <li>• <strong>New Account:</strong> Click "Create new account" to register</li>
-              <li>• <strong>Backend Required:</strong> Make sure the backend server is running</li>
-              <li>• <strong>Database:</strong> Demo user needs to be created in the database</li>
             </ul>
           </div>
         </div>

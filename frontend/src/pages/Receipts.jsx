@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Header from '../components/common/Header';
 import { receiptAPI } from '../services/api';
 import Modal from '../components/common/Modal';
@@ -16,7 +17,7 @@ const getErrorMessage = (error) => {
   }
   
   if (error?.response?.status === 413) {
-    return 'File size is too large. Please upload a smaller file (max 5MB).';
+    return 'File size is too large. Please upload a smaller file (max 10MB).';
   }
 
   if (error?.message?.includes('validation failed')) {
@@ -27,6 +28,7 @@ const getErrorMessage = (error) => {
 };
 
 const Receipts = () => {
+  const navigate = useNavigate();
   const [receipts, setReceipts] = useState([]);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -40,6 +42,9 @@ const Receipts = () => {
   const [dragActive, setDragActive] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
   const [filePreview, setFilePreview] = useState(null);
+  
+  // Success message state
+  const [successMessage, setSuccessMessage] = useState(null);
 
   useEffect(() => {
     fetchReceipts();
@@ -85,9 +90,9 @@ const Receipts = () => {
       return;
     }
 
-    // Validate file size (5MB limit)
-    if (file.size > 5 * 1024 * 1024) {
-      setError('File size must be less than 5MB');
+    // Validate file size (10MB limit to match backend)
+    if (file.size > 10 * 1024 * 1024) {
+      setError('File size must be less than 10MB');
       return;
     }
 
@@ -130,34 +135,62 @@ const Receipts = () => {
       
       // Show success message with helpful information
       setError('');  // Clear any previous errors
-      // Show a success message in green
-      const successDiv = document.createElement('div');
-      successDiv.className = 'mb-6 bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded relative';
-      successDiv.innerHTML = `
-        <div class="flex items-start">
-          <div class="flex-shrink-0">
-            <svg class="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
-              <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
-            </svg>
-          </div>
-          <div class="ml-3">
-            <h3 class="text-sm font-medium text-green-800">Receipt uploaded successfully!</h3>
-            <div class="mt-2 text-sm text-green-700">
-              Your receipt has been uploaded and is now being processed with OCR. You can check its status in the list below.
-            </div>
-          </div>
-        </div>
-      `;
       
-      // Find the error div container and replace it
-      const container = document.querySelector('[role="alert"]')?.parentNode;
-      if (container) {
-        container.insertBefore(successDiv, container.firstChild);
-        // Remove the success message after 5 seconds
-        setTimeout(() => successDiv.remove(), 5000);
+      // Determine message type based on response
+      const isProcessingWarning = response._isProcessingWarning || response.success === false;
+      const hasProcessingError = response.processingError;
+      
+      let messageClass, iconClass, title, message;
+      
+      if (isProcessingWarning && hasProcessingError) {
+        // Processing failed but upload succeeded
+        messageClass = 'bg-yellow-50 border-yellow-200 text-yellow-700';
+        iconClass = 'text-yellow-400';
+        title = 'Receipt uploaded with processing issues';
+        message = `Your receipt has been uploaded but OCR processing failed: ${hasProcessingError}. You can review and process it manually.`;
+      } else if (isProcessingWarning) {
+        // Processing warning but no specific error
+        messageClass = 'bg-yellow-50 border-yellow-200 text-yellow-700';
+        iconClass = 'text-yellow-400';
+        title = 'Receipt uploaded with processing issues';
+        message = 'Your receipt has been uploaded but there were some issues with OCR processing. You can review and process it manually.';
+      } else {
+        // Success
+        messageClass = 'bg-green-50 border-green-200 text-green-700';
+        iconClass = 'text-green-400';
+        title = 'Receipt uploaded successfully!';
+        message = 'Your receipt has been uploaded and is now being processed with OCR. You can check its status in the list below.';
       }
       
+      // Show success message using React state
+      setSuccessMessage({
+        class: messageClass,
+        iconClass: iconClass,
+        title: title,
+        message: message
+      });
+      
+      // Clear the success message after 6 seconds
+      setTimeout(() => {
+        setSuccessMessage(null);
+      }, 6000);
+      
     } catch (error) {
+      console.log('Receipt upload error caught:', error);
+      console.log('Error details:', {
+        message: error.message,
+        status: error.status,
+        details: error.details,
+        response: error.response?.data
+      });
+      
+      // Check if this is a processing warning (handled by API interceptor)
+      if (error._isProcessingWarning || error.success === false) {
+        // This was handled by the API interceptor as a success with warnings
+        // The success message should already be shown above
+        return;
+      }
+      
       let errorMessage = 'Failed to upload receipt';
       
       // Handle specific OCR errors
@@ -165,8 +198,19 @@ const Receipts = () => {
         errorMessage = 'The receipt image is too blurry or unclear. Please upload a clearer image with better lighting and focus.';
       } else if (error.message?.includes('validation failed')) {
         errorMessage = 'Invalid receipt data. Please check the receipt details and try again.';
+      } else if (error.processingError) {
+        errorMessage = `OCR processing failed: ${error.processingError}. Please try with a clearer image.`;
       } else if (error.response?.status === 413) {
-        errorMessage = 'Receipt file is too large. Please upload a smaller file (max 5MB).';
+        errorMessage = 'Receipt file is too large. Please upload a smaller file (max 10MB).';
+      } else if (error.status === 0) {
+        errorMessage = 'Network error. Please check your connection and ensure the backend server is running.';
+      } else if (error.status === 401) {
+        errorMessage = 'Authentication failed. Please log in again.';
+      } else if (error.status >= 500) {
+        errorMessage = 'Server error. Please try again later or contact support.';
+      } else if (error.message) {
+        // Use the specific error message from the backend
+        errorMessage = error.message;
       }
       
       setError(errorMessage);
@@ -265,7 +309,7 @@ const Receipts = () => {
       }, 100);
 
       // Navigate to transactions page with the data
-      window.location.href = `/transactions/new?${new URLSearchParams(transactionData).toString()}`;
+      navigate(`/transactions/new?${new URLSearchParams(transactionData).toString()}`);
       
     } catch (error) {
       setError(error.message || 'Failed to create transaction');
@@ -319,24 +363,43 @@ const Receipts = () => {
           </p>
         </div>
 
-        {/* Error Message */}
-        {error && (
-          <div className="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded relative" role="alert">
-            <div className="flex items-start">
-              <div className="flex-shrink-0">
-                <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                </svg>
-              </div>
-              <div className="ml-3">
-                <h3 className="text-sm font-medium text-red-800">Error uploading receipt</h3>
-                <div className="mt-2 text-sm text-red-700 whitespace-pre-line">
-                  {error}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
+                 {/* Error Message */}
+         {error && (
+           <div className="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded relative" role="alert">
+             <div className="flex items-start">
+               <div className="flex-shrink-0">
+                 <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                   <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                 </svg>
+               </div>
+               <div className="ml-3">
+                 <h3 className="text-sm font-medium text-red-800">Error uploading receipt</h3>
+                 <div className="mt-2 text-sm text-red-700 whitespace-pre-line">
+                   {error}
+                 </div>
+               </div>
+             </div>
+           </div>
+         )}
+
+         {/* Success Message */}
+         {successMessage && (
+           <div className={`mb-6 ${successMessage.class} px-4 py-3 rounded relative`}>
+             <div className="flex items-start">
+               <div className="flex-shrink-0">
+                 <svg className={`h-5 w-5 ${successMessage.iconClass}`} viewBox="0 0 20 20" fill="currentColor">
+                   <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                 </svg>
+               </div>
+               <div className="ml-3">
+                 <h3 className="text-sm font-medium">{successMessage.title}</h3>
+                 <div className="mt-2 text-sm">
+                   {successMessage.message}
+                 </div>
+               </div>
+             </div>
+           </div>
+         )}
 
         {/* Upload Section */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-8">
@@ -375,9 +438,9 @@ const Receipts = () => {
                 >
                   Choose File
                 </label>
-                <p className="text-xs text-gray-500 mt-2">
-                  Supported formats: JPEG, PNG, PDF (Max 5MB)
-                </p>
+                                 <p className="text-xs text-gray-500 mt-2">
+                   Supported formats: JPEG, PNG, PDF (Max 10MB)
+                 </p>
               </div>
             ) : (
               <div>
@@ -642,7 +705,7 @@ const Receipts = () => {
                 <li>• Upload receipt images (JPEG, PNG) or PDF files</li>
                 <li>• OCR technology extracts text and data automatically</li>
                 <li>• Review extracted information and create transactions</li>
-                <li>• Supported file formats: JPEG, PNG, PDF (max 5MB)</li>
+                                 <li>• Supported file formats: JPEG, PNG, PDF (max 10MB)</li>
               </ul>
             </div>
           </div>

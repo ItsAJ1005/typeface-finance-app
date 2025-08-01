@@ -56,9 +56,12 @@ api.interceptors.response.use(
 
     // Handle server errors
     if (error.response.status >= 500) {
+      // Use the actual error message from the backend if available
+      const backendMessage = error.response.data?.message;
       return Promise.reject({
-        message: 'Server error. Please try again later or contact support.',
-        status: error.response.status
+        message: backendMessage || 'Server error. Please try again later or contact support.',
+        status: error.response.status,
+        details: error.response.data?.details
       });
     }
 
@@ -71,6 +74,69 @@ api.interceptors.response.use(
           message: errorMessages,
           status: 400,
           errors: errors
+        });
+      }
+    }
+
+    // Handle receipt upload with processing warnings (422 status)
+    if (error.response.status === 422) {
+      console.log('422 response data:', error.response.data);
+      console.log('422 response URL:', error.config?.url);
+      // Check if this is a receipt upload with processing issues
+      // The backend returns 422 when OCR processing fails but upload succeeds
+      if (error.response.data?.processingError || 
+          error.response.data?.success === false || 
+          error.response.data?.message?.includes('processing failed')) {
+        console.log('Treating 422 as success with warnings');
+        // This is a receipt upload that succeeded but had processing issues
+        // We should treat this as a success with warnings
+        return Promise.resolve({
+          ...error.response.data,
+          _isProcessingWarning: true,
+          processingError: error.response.data?.processingError
+        });
+      }
+    }
+
+    // Handle receipt upload specific errors
+    if (error.config?.url?.includes('/receipts/upload')) {
+      console.log('Receipt upload error:', error.response.data);
+      
+      // Handle specific receipt upload errors
+      if (error.response.data?.error === 'INVALID_FILE_TYPE') {
+        return Promise.reject({
+          message: 'Please upload only JPEG, PNG images or PDF files.',
+          status: error.response.status
+        });
+      }
+      
+      if (error.response.data?.error === 'FILE_TOO_LARGE') {
+        return Promise.reject({
+          message: 'File size too large. Please upload an image smaller than 10MB.',
+          status: error.response.status
+        });
+      }
+      
+      if (error.response.data?.error === 'FILE_MISSING') {
+        return Promise.reject({
+          message: 'No file selected. Please choose a receipt image to upload.',
+          status: error.response.status
+        });
+      }
+      
+      if (error.response.data?.error === 'PROCESSING_FAILED') {
+        return Promise.reject({
+          message: error.response.data?.message || 'Failed to process receipt. Please try again with a clearer image.',
+          status: error.response.status
+        });
+      }
+      
+      // Handle processing errors from 422 responses
+      if (error.response.data?.processingError) {
+        return Promise.reject({
+          message: error.response.data?.message || 'Failed to process receipt. Please try again with a clearer image.',
+          status: error.response.status,
+          processingError: error.response.data?.processingError
         });
       }
     }

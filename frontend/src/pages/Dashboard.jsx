@@ -24,16 +24,13 @@ const Dashboard = () => {
 
       // Get analytics for summary
       const analyticsResponse = await transactionAPI.getAnalytics();
-      const analytics = analyticsResponse.data.analytics;
+      const analytics = analyticsResponse.data;
       
-      if (analytics && analytics.totalsByType) {
-        const income = analytics.totalsByType.find(item => item._id === 'income')?.total || 0;
-        const expenses = analytics.totalsByType.find(item => item._id === 'expense')?.total || 0;
-        
+      if (analytics) {
         setSummary({
-          totalIncome: income,
-          totalExpenses: expenses,
-          balance: income - expenses
+          totalIncome: analytics.totalIncome || 0,
+          totalExpenses: analytics.totalExpenses || 0,
+          balance: (analytics.totalIncome || 0) - (analytics.totalExpenses || 0)
         });
       }
     } catch (error) {
@@ -105,7 +102,7 @@ const Dashboard = () => {
           </Link>
 
           <Link 
-            to="/analytics" 
+            to="/analysis" 
             className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-shadow"
           >
             <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mb-4">

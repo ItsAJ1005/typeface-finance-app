@@ -39,12 +39,32 @@ const Register = ({ setIsAuth }) => {
         email: formData.email,
         password: formData.password
       });
-      
+
       login(response.data.token, response.data.user);
       setIsAuth(true);
       navigate('/dashboard');
     } catch (error) {
       setError(error.message || 'Registration failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDemoLogin = async () => {
+    setLoading(true);
+    setError('');
+
+    try {
+      const response = await authAPI.login({
+        email: 'demo@finance.com',
+        password: 'demo123'
+      });
+
+      login(response.data.token, response.data.user);
+      setIsAuth(true);
+      navigate('/dashboard');
+    } catch (error) {
+      setError('Demo login failed. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -77,6 +97,20 @@ const Register = ({ setIsAuth }) => {
                 {error}
               </div>
             )}
+
+            <div>
+              <div className="text-center mb-3">
+                <p className="text-xs text-gray-500 mb-2">For evaluators: Try the app instantly</p>
+              </div>
+              <button
+                type="button"
+                onClick={handleDemoLogin}
+                disabled={loading}
+                className="w-full flex justify-center py-3 px-4 border border-blue-300 rounded-md shadow-sm text-sm font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 transition-colors duration-200"
+              >
+                {loading ? 'Logging in...' : '🚀 Demo Login'}
+              </button>
+            </div>
 
             <div>
               <label htmlFor="name" className="block text-sm font-medium text-gray-700">
@@ -163,6 +197,7 @@ const Register = ({ setIsAuth }) => {
                 {loading ? 'Creating account...' : 'Create account'}
               </button>
             </div>
+
           </form>
 
           <div className="mt-6">

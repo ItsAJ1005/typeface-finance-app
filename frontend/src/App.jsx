@@ -9,6 +9,7 @@ import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import Transactions from './pages/Transactions';
 import Receipts from './pages/Receipts';
+import Analysis from './pages/Analysis';
 
 // Components
 import Header from './components/common/Header';
@@ -59,9 +60,19 @@ function App() {
               <Transactions />
             </ProtectedRoute>
           } />
+          <Route path="/transactions/new" element={
+            <ProtectedRoute isAuth={isAuth}>
+              <Transactions />
+            </ProtectedRoute>
+          } />
           <Route path="/receipts" element={
             <ProtectedRoute isAuth={isAuth}>
               <Receipts />
+            </ProtectedRoute>
+          } />
+          <Route path="/analysis" element={
+            <ProtectedRoute isAuth={isAuth}>
+              <Analysis />
             </ProtectedRoute>
           } />
           

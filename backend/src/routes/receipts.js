@@ -8,6 +8,9 @@ const Transaction = require('../models/Transaction');
 
 const router = express.Router();
 
+// In-memory storage for receipts when MongoDB is not available
+const inMemoryReceipts = new Map();
+
 // Multer configuration for file uploads
 const storage = multer.diskStorage({
   destination: async (req, file, cb) => {
@@ -141,22 +144,42 @@ router.post('/upload', auth, upload.single('receipt'), async (req, res) => {
     const shouldCreateTransaction = extractedData.amount && extractedData.amount > 0;
     
     if (shouldCreateTransaction) {
-      transaction = new Transaction({
-        userId: req.userId,
-        type: 'expense',
-        amount: extractedData.amount,
-        category: extractedData.category || 'Others',
-        description: extractedData.description || `Receipt from ${extractedData.merchant || 'Unknown'}`,
-        date: extractedData.date || new Date(),
-        receiptId: fileName,
-        receiptUrl: fileUrl,
-        isFromReceipt: true,
-        processingConfidence: confidence,
-        needsReview: confidence < 60 || !extractedData.amount
-      });
+      try {
+        transaction = new Transaction({
+          userId: req.userId,
+          type: 'expense',
+          amount: extractedData.amount,
+          category: extractedData.category || 'Others',
+          description: extractedData.description || `Receipt from ${extractedData.merchant || 'Unknown'}`,
+          date: extractedData.date || new Date(),
+          receiptId: fileName,
+          receiptUrl: fileUrl,
+          isFromReceipt: true,
+          processingConfidence: confidence,
+          needsReview: confidence < 60 || !extractedData.amount
+        });
 
-      await transaction.save();
-      console.log('Transaction created successfully');
+        await transaction.save();
+        console.log('Transaction created successfully');
+      } catch (dbError) {
+        console.log('Database not available, storing in memory');
+        // Store in memory if database is not available
+        inMemoryReceipts.set(fileName, {
+          userId: req.userId,
+          type: 'expense',
+          amount: extractedData.amount,
+          category: extractedData.category || 'Others',
+          description: extractedData.description || `Receipt from ${extractedData.merchant || 'Unknown'}`,
+          date: extractedData.date || new Date(),
+          receiptId: fileName,
+          receiptUrl: fileUrl,
+          isFromReceipt: true,
+          processingConfidence: confidence,
+          needsReview: confidence < 60 || !extractedData.amount,
+          extractedData: extractedData
+        });
+        transaction = inMemoryReceipts.get(fileName);
+      }
     }
 
     // Prepare response
@@ -232,32 +255,60 @@ router.post('/upload', auth, upload.single('receipt'), async (req, res) => {
 // Get all receipts for user with processing status
 router.get('/', auth, async (req, res) => {
   try {
-    // Find all transactions that have receipts
-    const transactions = await Transaction.find({
-      userId: req.userId,
-      receiptId: { $exists: true, $ne: null }
-    }).sort({ createdAt: -1 });
+    let receipts = [];
+    
+    try {
+      // Find all transactions that have receipts
+      const transactions = await Transaction.find({
+        userId: req.userId,
+        receiptId: { $exists: true, $ne: null }
+      }).sort({ createdAt: -1 });
 
-    // Format receipts data with processing information
-    const receipts = transactions.map(transaction => ({
-      _id: transaction.receiptId,
-      filename: transaction.receiptId,
-      fileSize: 0,
-      uploadDate: transaction.createdAt,
-      processingStatus: {
-        confidence: transaction.processingConfidence || 0,
-        needsReview: transaction.needsReview || false,
-        status: transaction.processingConfidence < 30 ? 'poor_quality' : 
-                transaction.processingConfidence < 60 ? 'low_confidence' : 'success'
-      },
-      extractedData: {
-        amount: transaction.amount,
-        merchant: transaction.description?.replace('Receipt from ', '') || 'Unknown',
-        date: transaction.date,
-        category: transaction.category,
-        description: transaction.description
-      }
-    }));
+      // Format receipts data with processing information
+      receipts = transactions.map(transaction => ({
+        _id: transaction.receiptId,
+        filename: transaction.receiptId,
+        fileSize: 0,
+        uploadDate: transaction.createdAt,
+        processingStatus: {
+          confidence: transaction.processingConfidence || 0,
+          needsReview: transaction.needsReview || false,
+          status: transaction.processingConfidence < 30 ? 'poor_quality' : 
+                  transaction.processingConfidence < 60 ? 'low_confidence' : 'success'
+        },
+        extractedData: {
+          amount: transaction.amount,
+          merchant: transaction.description?.replace('Receipt from ', '') || 'Unknown',
+          date: transaction.date,
+          category: transaction.category,
+          description: transaction.description
+        }
+      }));
+    } catch (dbError) {
+      console.log('Database not available, using in-memory receipts');
+      // Use in-memory storage if database is not available
+      receipts = Array.from(inMemoryReceipts.values())
+        .filter(receipt => receipt.userId === req.userId)
+        .map(receipt => ({
+          _id: receipt.receiptId,
+          filename: receipt.receiptId,
+          fileSize: 0,
+          uploadDate: receipt.date,
+          processingStatus: {
+            confidence: receipt.processingConfidence || 0,
+            needsReview: receipt.needsReview || false,
+            status: receipt.processingConfidence < 30 ? 'poor_quality' : 
+                    receipt.processingConfidence < 60 ? 'low_confidence' : 'success'
+          },
+          extractedData: receipt.extractedData || {
+            amount: receipt.amount,
+            merchant: receipt.description?.replace('Receipt from ', '') || 'Unknown',
+            date: receipt.date,
+            category: receipt.category,
+            description: receipt.description
+          }
+        }));
+    }
 
     res.json({
       success: true,

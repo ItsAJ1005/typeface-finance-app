@@ -74,7 +74,9 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/finance-a
 })
 .catch((error) => {
   console.error('❌ MongoDB connection error:', error);
-  process.exit(1);
+  console.log('⚠️  Server will start without database connection');
+  console.log('💡 To fix this, install MongoDB or set MONGODB_URI environment variable');
+  // Don't exit the process, let the server start without DB
 });
 
 const PORT = process.env.PORT || 5000;

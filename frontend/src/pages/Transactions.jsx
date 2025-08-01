@@ -55,6 +55,57 @@ const Transactions = () => {
     fetchTransactions();
   }, [searchParams]);
 
+  // Handle URL parameters for pre-filling form when coming from receipts
+  useEffect(() => {
+    const amount = searchParams.get('amount');
+    const merchant = searchParams.get('merchant');
+    const date = searchParams.get('date');
+    const description = searchParams.get('description');
+    const type = searchParams.get('type');
+    const category = searchParams.get('category');
+    const receiptId = searchParams.get('receiptId');
+
+    // If we have transaction data from URL params, pre-fill the form and open modal
+    if (amount || merchant || date || description) {
+      // Convert date format if needed (from ISO to yyyy-MM-dd)
+      let formattedDate = date;
+      if (date) {
+        try {
+          const dateObj = new Date(date);
+          if (!isNaN(dateObj.getTime())) {
+            formattedDate = dateObj.toISOString().split('T')[0];
+          }
+        } catch (error) {
+          console.error('Error parsing date:', error);
+          formattedDate = new Date().toISOString().split('T')[0]; // Fallback to today
+        }
+      }
+
+      setFormData(prev => ({
+        ...prev,
+        amount: amount || prev.amount,
+        description: description || prev.description,
+        date: formattedDate || prev.date,
+        type: type || prev.type,
+        category: category || prev.category
+      }));
+      
+      // Open the add modal with pre-filled data
+      setShowAddModal(true);
+      
+      // Clear the URL parameters after processing them
+      const newSearchParams = new URLSearchParams(searchParams);
+      newSearchParams.delete('amount');
+      newSearchParams.delete('merchant');
+      newSearchParams.delete('date');
+      newSearchParams.delete('description');
+      newSearchParams.delete('type');
+      newSearchParams.delete('category');
+      newSearchParams.delete('receiptId');
+      setSearchParams(newSearchParams);
+    }
+  }, [searchParams, setSearchParams]);
+
   const fetchTransactions = async () => {
     try {
       setLoading(true);
@@ -127,6 +178,32 @@ const Transactions = () => {
       setSelectedTransaction(null);
       resetForm();
       fetchTransactions();
+      
+      // Show success message if coming from receipt
+      const receiptId = searchParams.get('receiptId');
+      if (receiptId) {
+        // Create a temporary success message
+        const successDiv = document.createElement('div');
+        successDiv.className = 'fixed top-4 right-4 bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg shadow-lg z-50';
+        successDiv.innerHTML = `
+          <div class="flex items-start">
+            <div class="flex-shrink-0">
+              <svg class="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+              </svg>
+            </div>
+            <div class="ml-3">
+              <h3 class="text-sm font-medium text-green-800">Transaction Created Successfully!</h3>
+              <div class="mt-2 text-sm text-green-700">
+                <p>✅ Transaction from receipt has been saved to your list.</p>
+                <p>💡 <strong>Note:</strong> Click "Save" to see the updated transaction in your list.</p>
+              </div>
+            </div>
+          </div>
+        `;
+        document.body.appendChild(successDiv);
+        setTimeout(() => successDiv.remove(), 6000);
+      }
     } catch (error) {
       // Handle validation errors from backend
       if (error.errors && Array.isArray(error.errors)) {
@@ -439,6 +516,21 @@ const Transactions = () => {
         title={showEditModal ? 'Edit Transaction' : 'Add Transaction'}
       >
         <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Helpful note for users */}
+          <div className="bg-blue-50 border border-blue-200 rounded-md p-3 mb-4">
+            <div className="flex items-start">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <p className="text-sm text-blue-700">
+                  <strong>💡 Tip:</strong> Click "Save" to add this transaction to your list and see it updated immediately.
+                </p>
+              </div>
+            </div>
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
