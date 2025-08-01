@@ -2,7 +2,7 @@
 
 A full-stack application for tracking income and expenses with AI-powered receipt processing and analytics.
 
-**By AJ Harsh Vardhan**
+**By Jaya Harsh Vardhan Alagadapa (IIITS)**
 
 ## 🚀 Features
 
@@ -72,13 +72,19 @@ This creates a demo user with:
 - Email: `demo@finance.com`
 - Password: `demo123`
 
-### 6. Frontend Setup
+### 6. Add Sample Data (Optional)
+```bash
+npm run setup-data
+```
+This creates sample transactions and receipts for testing.
+
+### 7. Frontend Setup
 ```bash
 cd ../frontend
 npm install
 ```
 
-### 7. Start Frontend Development Server
+### 8. Start Frontend Development Server
 ```bash
 npm run dev
 ```

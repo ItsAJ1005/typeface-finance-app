@@ -4,6 +4,28 @@ import { receiptAPI } from '../services/api';
 import Modal from '../components/common/Modal';
 import Loader from '../components/common/Loader';
 
+const getErrorMessage = (error) => {
+  if (error?.message?.includes('No text could be extracted')) {
+    return `The receipt image is too blurry or unclear. Please try:
+
+• Taking the photo in better lighting
+• Holding the camera steady and parallel to the receipt
+• Making sure the receipt is flat and not crumpled
+• Capturing the entire receipt clearly in frame
+• Ensuring there is good contrast between text and background`;
+  }
+  
+  if (error?.response?.status === 413) {
+    return 'File size is too large. Please upload a smaller file (max 5MB).';
+  }
+
+  if (error?.message?.includes('validation failed')) {
+    return 'Invalid receipt data. Please check the receipt details and try again.';
+  }
+
+  return error?.message || 'Failed to process receipt. Please try again.';
+};
+
 const Receipts = () => {
   const [receipts, setReceipts] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -106,11 +128,48 @@ const Receipts = () => {
       // Refresh receipts list
       await fetchReceipts();
       
-      // Show success message
-      alert('Receipt uploaded successfully! Processing with OCR...');
+      // Show success message with helpful information
+      setError('');  // Clear any previous errors
+      // Show a success message in green
+      const successDiv = document.createElement('div');
+      successDiv.className = 'mb-6 bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded relative';
+      successDiv.innerHTML = `
+        <div class="flex items-start">
+          <div class="flex-shrink-0">
+            <svg class="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+            </svg>
+          </div>
+          <div class="ml-3">
+            <h3 class="text-sm font-medium text-green-800">Receipt uploaded successfully!</h3>
+            <div class="mt-2 text-sm text-green-700">
+              Your receipt has been uploaded and is now being processed with OCR. You can check its status in the list below.
+            </div>
+          </div>
+        </div>
+      `;
+      
+      // Find the error div container and replace it
+      const container = document.querySelector('[role="alert"]')?.parentNode;
+      if (container) {
+        container.insertBefore(successDiv, container.firstChild);
+        // Remove the success message after 5 seconds
+        setTimeout(() => successDiv.remove(), 5000);
+      }
       
     } catch (error) {
-      setError(error.message || 'Failed to upload receipt');
+      let errorMessage = 'Failed to upload receipt';
+      
+      // Handle specific OCR errors
+      if (error.message?.includes('No text could be extracted')) {
+        errorMessage = 'The receipt image is too blurry or unclear. Please upload a clearer image with better lighting and focus.';
+      } else if (error.message?.includes('validation failed')) {
+        errorMessage = 'Invalid receipt data. Please check the receipt details and try again.';
+      } else if (error.response?.status === 413) {
+        errorMessage = 'Receipt file is too large. Please upload a smaller file (max 5MB).';
+      }
+      
+      setError(errorMessage);
     } finally {
       setUploading(false);
     }
@@ -156,9 +215,58 @@ const Receipts = () => {
 
   const handleCreateTransaction = async (extractedData) => {
     try {
-      // This would typically navigate to the transactions page with pre-filled data
-      // For now, we'll show an alert
-      alert('Transaction creation feature will be implemented. Extracted data: ' + JSON.stringify(extractedData, null, 2));
+      // Close the current modal
+      setShowPreviewModal(false);
+      
+      // Create the transaction object from extracted data
+      const transactionData = {
+        amount: extractedData.amount,
+        merchant: extractedData.merchant,
+        date: extractedData.date,
+        description: extractedData.items?.join(', ') || '',
+        type: 'expense', // Default type
+        category: 'uncategorized', // Default category
+        receiptId: selectedReceipt._id // Link to the receipt
+      };
+
+      // Create notification container if it doesn't exist
+      let notificationContainer = document.querySelector('#notification-container');
+      if (!notificationContainer) {
+        notificationContainer = document.createElement('div');
+        notificationContainer.id = 'notification-container';
+        notificationContainer.className = 'fixed top-4 right-4 z-50 space-y-4 max-w-md';
+        document.body.appendChild(notificationContainer);
+      }
+
+      // Show processing notification
+      const notificationDiv = document.createElement('div');
+      notificationDiv.className = 'bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg shadow-lg transform transition-all duration-300 opacity-0';
+      notificationDiv.innerHTML = `
+        <div class="flex items-start">
+          <div class="flex-shrink-0">
+            <svg class="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+            </svg>
+          </div>
+          <div class="ml-3 flex-1">
+            <h3 class="text-sm font-medium text-green-800">Creating Transaction</h3>
+            <div class="mt-2 text-sm text-green-700">
+              <p>Creating transaction for ₹${extractedData.amount} at ${extractedData.merchant}...</p>
+            </div>
+          </div>
+        </div>
+      `;
+      
+      // Add the notification and animate it
+      notificationContainer.appendChild(notificationDiv);
+      setTimeout(() => {
+        notificationDiv.classList.add('opacity-100');
+        notificationDiv.classList.add('translate-y-0');
+      }, 100);
+
+      // Navigate to transactions page with the data
+      window.location.href = `/transactions/new?${new URLSearchParams(transactionData).toString()}`;
+      
     } catch (error) {
       setError(error.message || 'Failed to create transaction');
     }
@@ -213,8 +321,20 @@ const Receipts = () => {
 
         {/* Error Message */}
         {error && (
-          <div className="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
-            {error}
+          <div className="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded relative" role="alert">
+            <div className="flex items-start">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <h3 className="text-sm font-medium text-red-800">Error uploading receipt</h3>
+                <div className="mt-2 text-sm text-red-700 whitespace-pre-line">
+                  {error}
+                </div>
+              </div>
+            </div>
           </div>
         )}
 
