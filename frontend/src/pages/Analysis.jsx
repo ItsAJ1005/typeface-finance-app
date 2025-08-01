@@ -1,8 +1,28 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { Bar } from 'react-chartjs-2';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend
+} from 'chart.js';
 import Header from '../components/common/Header';
 import { transactionAPI } from '../services/api';
 import Loader from '../components/common/Loader';
+
+// Register ChartJS components
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend
+);
 
 const Analysis = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -366,18 +386,56 @@ const Analysis = () => {
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Top Spending Categories</h3>
                 {analytics.topCategories && analytics.topCategories.length > 0 ? (
-                  <div className="space-y-3">
-                    {analytics.topCategories.slice(0, 5).map((category, index) => (
-                      <div key={category.name} className="flex items-center justify-between">
-                        <div className="flex items-center">
-                          <span className="text-sm font-medium text-gray-500 mr-2">#{index + 1}</span>
-                          <span className="text-sm text-gray-700">{category.name}</span>
-                        </div>
-                        <span className="text-sm font-semibold text-gray-900">
-                          {formatCurrency(category.amount)}
-                        </span>
-                      </div>
-                    ))}
+                  <div>
+                    <Bar
+                      data={{
+                        labels: analytics.topCategories.slice(0, 5).map(cat => cat.name),
+                        datasets: [{
+                          label: 'Spending Amount',
+                          data: analytics.topCategories.slice(0, 5).map(cat => cat.amount),
+                          backgroundColor: [
+                            'rgba(239, 68, 68, 0.8)',   // red-500
+                            'rgba(249, 115, 22, 0.8)',  // orange-500
+                            'rgba(245, 158, 11, 0.8)',  // amber-500
+                            'rgba(16, 185, 129, 0.8)',  // green-500
+                            'rgba(59, 130, 246, 0.8)',  // blue-500
+                          ],
+                          borderColor: [
+                            'rgb(239, 68, 68)',   // red-500
+                            'rgb(249, 115, 22)',  // orange-500
+                            'rgb(245, 158, 11)',  // amber-500
+                            'rgb(16, 185, 129)',  // green-500
+                            'rgb(59, 130, 246)',  // blue-500
+                          ],
+                          borderWidth: 1
+                        }]
+                      }}
+                      options={{
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                          legend: {
+                            display: false
+                          },
+                          tooltip: {
+                            callbacks: {
+                              label: (context) => {
+                                return formatCurrency(context.raw);
+                              }
+                            }
+                          }
+                        },
+                        scales: {
+                          y: {
+                            beginAtZero: true,
+                            ticks: {
+                              callback: (value) => formatCurrency(value)
+                            }
+                          }
+                        }
+                      }}
+                      style={{ height: '300px' }}
+                    />
                   </div>
                 ) : (
                   <p className="text-gray-500 text-center py-4">No category data available</p>

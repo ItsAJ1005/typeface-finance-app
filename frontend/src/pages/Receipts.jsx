@@ -170,10 +170,12 @@ const Receipts = () => {
         message: message
       });
       
-      // Clear the success message after 6 seconds
+      // Clear the success message after an appropriate duration
+      // Use longer duration (10s) for processing failures, standard duration (6s) for success
+      const messageTimeout = (isProcessingWarning && hasProcessingError) ? 10000 : 6000;
       setTimeout(() => {
         setSuccessMessage(null);
-      }, 6000);
+      }, messageTimeout);
       
     } catch (error) {
       console.log('Receipt upload error caught:', error);
