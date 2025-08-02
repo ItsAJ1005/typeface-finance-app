@@ -13,6 +13,10 @@ A production-ready, full-stack application that revolutionizes personal finance 
 [![GitHub stars](https://img.shields.io/github/stars/ItsAJ1005/typeface-finance-app?style=social)](https://github.com/ItsAJ1005/typeface-finance-app/stargazers)
 [![MIT License](https://img.shields.io/badge/License-MIT-green.svg)](https://choosealicense.com/licenses/mit/)
 
+### 🚀 **Live Site**
+
+[![Live Site](https://img.shields.io/badge/🌐_VISIT_LIVE_SITE-FF4757?style=for-the-badge&logo=google-chrome&logoColor=white&labelColor=000000)](https://typeface-finance-app.vercel.app/)
+
 ## 🚀 Key Features
 
 ### 💡 Smart Financial Management
