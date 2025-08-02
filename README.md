@@ -1,6 +1,8 @@
 # 💰 Personal Finance Assistant
 
-[![Live Demo](https://img.shields.io/badge/LIVE_DEMO-Visit_App-2ea44f?style=for-the-badge&logo=firefox&logoColor=white)](https://demo-finance-app.vercel.app)
+[![Live Demo](https://img.shields.io/badge/LIVE_DEMO-Try_it_Now_🚀-FF5757?style=for-the-badge&logo=react&logoColor=white)](https://finance-assistant.vercel.app)
+[![Deployment Status](https://img.shields.io/github/deployments/ItsAJ1005/typeface-finance-app/production?style=for-the-badge&logo=vercel&label=vercel&logoColor=white)](https://vercel.com/ItsAJ1005/finance-assistant/deployments)
+[![Backend Status](https://img.shields.io/badge/API-Online_✨-blue?style=for-the-badge&logo=railway&logoColor=white)](https://finance-assistant-production.up.railway.app)
 
 > 🌟 Transform your financial management with insights and automated receipt processing
 
@@ -82,6 +84,37 @@ A production-ready, full-stack application that revolutionizes personal finance 
   - Hot Module Replacement (HMR)
   - Development-ready configurations
   - Comprehensive error handling
+
+## � Deployment & Scaling
+
+### Cloud Infrastructure
+- **Frontend:** Vercel for automatic deployments and global CDN
+- **Backend:** Railway with auto-scaling capabilities
+- **Database:** MongoDB Atlas with automated backups
+- **File Storage:** AWS S3 for scalable receipt storage
+- **Monitoring:** Integrated logging and performance monitoring
+
+### Performance Optimizations
+- **Frontend:**
+  - Code splitting and lazy loading
+  - Asset optimization and caching
+  - CDN integration for static assets
+  - Progressive Web App (PWA) ready
+- **Backend:**
+  - Connection pooling
+  - Request rate limiting
+  - Caching strategies
+  - Optimized database queries
+
+### Security Measures
+- **Authentication:** JWT with refresh token rotation
+- **Data Protection:** AES-256 encryption for sensitive data
+- **API Security:** 
+  - Rate limiting
+  - CORS configuration
+  - XSS protection
+  - CSRF prevention
+- **Input Validation:** Comprehensive request validation
 
 ## 📋 Prerequisites
 

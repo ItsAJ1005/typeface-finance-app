@@ -1,8 +1,10 @@
 import axios from 'axios';
 import { getToken, removeToken } from '../utils/auth';
 
+const YOUR_BACKEND_URL = 'https://typeface-finance-app.onrender.com'; // Replace with your backend URL
+
 // Base URL from environment or fallback
-const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const BASE_URL = YOUR_BACKEND_URL || 'http://localhost:5000/api';
 
 // Create axios instance
 const api = axios.create({
