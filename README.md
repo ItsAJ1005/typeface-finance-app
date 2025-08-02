@@ -1,12 +1,13 @@
 # 💰 Personal Finance Assistant
 
-[![Live Demo](https://img.shields.io/badge/LIVE_DEMO-Try_it_Now_🚀-FF5757?style=for-the-badge&logo=react&logoColor=white)](https://finance-assistant.vercel.app)
-[![Deployment Status](https://img.shields.io/github/deployments/ItsAJ1005/typeface-finance-app/production?style=for-the-badge&logo=vercel&label=vercel&logoColor=white)](https://vercel.com/ItsAJ1005/finance-assistant/deployments)
-[![Backend Status](https://img.shields.io/badge/API-Online_✨-blue?style=for-the-badge&logo=railway&logoColor=white)](https://finance-assistant-production.up.railway.app)
+[![Live Demo](https://img.shields.io/badge/LIVE_DEMO-Try_it_Now_🚀-FF5757?style=for-the-badge&logo=react&logoColor=white)](https://typeface-finance-app.vercel.app/)
+[![Frontend Status](https://img.shields.io/github/deployments/ItsAJ1005/typeface-finance-app/production?style=for-the-badge&logo=vercel&label=vercel&logoColor=white)](https://typeface-finance-app.vercel.app)
+[![Backend Status](https://img.shields.io/badge/API-Online_✨-blue?style=for-the-badge&logo=render&logoColor=white)](https://typeface-finance-app.onrender.com)
+
 
 > 🌟 Transform your financial management with insights and automated receipt processing
 
-A production-ready, full-stack application that revolutionizes personal finance management through cutting-edge AI technology, automated receipt processing, and real-time analytics. Built with enterprise-grade security and scalability in mind.
+A production-ready, full-stack application that revolutionizes personal finance management, automated receipt processing, and real-time analytics. Built with enterprise-grade security and scalability in mind.
 
 **By Jaya Harsh Vardhan Alagadapa (IIITS)**
 [![GitHub stars](https://img.shields.io/github/stars/ItsAJ1005/typeface-finance-app?style=social)](https://github.com/ItsAJ1005/typeface-finance-app/stargazers)
@@ -15,12 +16,10 @@ A production-ready, full-stack application that revolutionizes personal finance 
 ## 🚀 Key Features
 
 ### 💡 Smart Financial Management
-- **Intelligent Transaction Categorization** - AI-powered automatic categorization of transactions using advanced pattern recognition
-- **Multi-Currency Support** - Handle transactions in multiple currencies with real-time conversion
+- **Intelligent Transaction Categorization** - Categorization of transactions using catefory mappings
 - **Custom Categories & Tags** - Create personalized categories and tags for better organization
-- **Budget Planning & Alerts** - Set monthly budgets and receive real-time notifications
 
-### 🤖 AI-Powered Receipt Processing
+### 🤖 Receipt Processing
 - **Advanced OCR Technology** - Utilizes Tesseract.js for accurate text extraction from receipts
 - **Smart Data Extraction** - Automatically identifies merchant names, amounts, dates, and items
 - **PDF Statement Import** - Bulk import transactions from bank statements and credit card PDFs
@@ -28,20 +27,16 @@ A production-ready, full-stack application that revolutionizes personal finance 
 
 ### 📊 Advanced Analytics
 - **Interactive Dashboards** - Real-time visualization of financial data
-- **Predictive Insights** - AI-driven spending predictions and trends analysis
-- **Custom Reports** - Generate detailed financial reports with custom date ranges
+- **Custom Reports** - Generate detled financial reports with custom date ranges
 - **Category Analytics** - Deep dive into spending patterns by category
 
 ### 🔒 Enterprise-Grade Security
 - **JWT Authentication** - Secure token-based authentication system
 - **Rate Limiting** - Protection against brute force attacks
-- **Data Encryption** - Sensitive data encryption at rest and in transit
 - **Input Validation** - Comprehensive request validation and sanitization
 
 ### 🎯 User Experience
 - **Responsive Design** - Seamless experience across all devices
-- **Dark/Light Mode** - Eye-friendly theme options
-- **Offline Support** - Basic functionality works without internet
 - **Real-time Updates** - Instant reflection of changes across devices
 
 ## 🛠️ Technology Stack
@@ -85,30 +80,8 @@ A production-ready, full-stack application that revolutionizes personal finance 
   - Development-ready configurations
   - Comprehensive error handling
 
-## � Deployment & Scaling
-
-### Cloud Infrastructure
-- **Frontend:** Vercel for automatic deployments and global CDN
-- **Backend:** Railway with auto-scaling capabilities
-- **Database:** MongoDB Atlas with automated backups
-- **File Storage:** AWS S3 for scalable receipt storage
-- **Monitoring:** Integrated logging and performance monitoring
-
-### Performance Optimizations
-- **Frontend:**
-  - Code splitting and lazy loading
-  - Asset optimization and caching
-  - CDN integration for static assets
-  - Progressive Web App (PWA) ready
-- **Backend:**
-  - Connection pooling
-  - Request rate limiting
-  - Caching strategies
-  - Optimized database queries
-
 ### Security Measures
 - **Authentication:** JWT with refresh token rotation
-- **Data Protection:** AES-256 encryption for sensitive data
 - **API Security:** 
   - Rate limiting
   - CORS configuration
@@ -314,26 +287,16 @@ typeface-finance-app/
 
 ### Cloud Infrastructure
 - **Frontend:** Vercel for automatic deployments and global CDN
-- **Backend:** Railway/Heroku with auto-scaling capabilities
+- **Backend:** Render with auto-scaling capabilities
 - **Database:** MongoDB Atlas with automated backups
-- **File Storage:** AWS S3 for scalable receipt storage
 - **Monitoring:** Integrated logging and performance monitoring
 
 ### Performance Optimizations
-- **Frontend:**
-  - Code splitting and lazy loading
-  - Asset optimization and caching
-  - CDN integration for static assets
-  - Progressive Web App (PWA) ready
-- **Backend:**
-  - Connection pooling
   - Request rate limiting
-  - Caching strategies
   - Optimized database queries
 
 ### Security Measures
 - **Authentication:** JWT with refresh token rotation
-- **Data Protection:** AES-256 encryption for sensitive data
 - **API Security:** 
   - Rate limiting
   - CORS configuration
@@ -353,7 +316,7 @@ MIT License - see LICENSE file for details
 
 <div align="center">
 
-**Built with ❤️ using React, Node.js, and MongoDB**
+**Built with ❤️ using React, Node.js, Express, Tesseract.js and MongoDB**
 
 If you found this project helpful, please consider giving it a ⭐
 
