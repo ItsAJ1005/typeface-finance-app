@@ -16,6 +16,9 @@ A production-ready, full-stack application that revolutionizes personal finance 
 ### 🚀 **Live Site**
 
 [![Live Site](https://img.shields.io/badge/🌐_VISIT_LIVE_SITE-FF4757?style=for-the-badge&logo=google-chrome&logoColor=white&labelColor=000000)](https://typeface-finance-app.vercel.app/)
+### 📷 **Demo Video (click on below image for demo video)**
+[![Watch the video](https://i.postimg.cc/FsWSRf6v/expense-tracker.jpg)](https://drive.google.com/file/d/1_jS_55DXUMscizPXFJKCFeEOq0cCZ0-X/view?usp=sharing)
+
 
 ## 🚀 Key Features
 
