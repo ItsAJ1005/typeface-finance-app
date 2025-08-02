@@ -102,7 +102,7 @@ const Transactions = () => {
       newSearchParams.delete('type');
       newSearchParams.delete('category');
       newSearchParams.delete('receiptId');
-      setSearchParams(newSearchParams);
+      setSearchParams(newSearchParams, { replace: true });
     }
   }, [searchParams, setSearchParams]);
 

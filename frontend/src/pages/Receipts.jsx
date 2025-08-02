@@ -5,27 +5,27 @@ import { receiptAPI } from '../services/api';
 import Modal from '../components/common/Modal';
 import Loader from '../components/common/Loader';
 
-const getErrorMessage = (error) => {
-  if (error?.message?.includes('No text could be extracted')) {
-    return `The receipt image is too blurry or unclear. Please try:
+// const getErrorMessage = (error) => {
+//   if (error?.message?.includes('No text could be extracted')) {
+//     return `The receipt image is too blurry or unclear. Please try:
 
-• Taking the photo in better lighting
-• Holding the camera steady and parallel to the receipt
-• Making sure the receipt is flat and not crumpled
-• Capturing the entire receipt clearly in frame
-• Ensuring there is good contrast between text and background`;
-  }
+// • Taking the photo in better lighting
+// • Holding the camera steady and parallel to the receipt
+// • Making sure the receipt is flat and not crumpled
+// • Capturing the entire receipt clearly in frame
+// • Ensuring there is good contrast between text and background`;
+//   }
   
-  if (error?.response?.status === 413) {
-    return 'File size is too large. Please upload a smaller file (max 10MB).';
-  }
+//   if (error?.response?.status === 413) {
+//     return 'File size is too large. Please upload a smaller file (max 10MB).';
+//   }
 
-  if (error?.message?.includes('validation failed')) {
-    return 'Invalid receipt data. Please check the receipt details and try again.';
-  }
+//   if (error?.message?.includes('validation failed')) {
+//     return 'Invalid receipt data. Please check the receipt details and try again.';
+//   }
 
-  return error?.message || 'Failed to process receipt. Please try again.';
-};
+//   return error?.message || 'Failed to process receipt. Please try again.';
+// };
 
 const Receipts = () => {
   const navigate = useNavigate();
@@ -302,6 +302,11 @@ const Receipts = () => {
           </div>
         </div>
       `;
+      // Auto-hide after 6 seconds
+      setTimeout(() => {
+        // notificationDiv.innerHTML = '';
+        notificationDiv.style.display = 'none';
+      }, 6000);
       
       // Add the notification and animate it
       notificationContainer.appendChild(notificationDiv);
@@ -311,7 +316,14 @@ const Receipts = () => {
       }, 100);
 
       // Navigate to transactions page with the data
-      navigate(`/transactions/new?${new URLSearchParams(transactionData).toString()}`);
+      // navigate(`/transactions/new?${new URLSearchParams(transactionData).toString()}`);
+
+      navigate('/transactions', {
+        state: { 
+          transactionData,
+          showCreateModal: true 
+        }
+      });
       
     } catch (error) {
       setError(error.message || 'Failed to create transaction');
@@ -361,7 +373,7 @@ const Receipts = () => {
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Receipts</h1>
           <p className="text-gray-600">
-            Upload and process receipts with OCR technology
+            Upload receipts and automatically create transactions with OCR technology
           </p>
         </div>
 
@@ -503,7 +515,7 @@ const Receipts = () => {
               </div>
               <h3 className="text-lg font-medium text-gray-900 mb-2">No receipts uploaded</h3>
               <p className="text-gray-600 mb-4">
-                Upload your first receipt to get started with OCR processing
+                Upload your first receipt to automatically extract transaction details
               </p>
             </div>
           ) : (
@@ -534,11 +546,11 @@ const Receipts = () => {
                         <div className="flex items-center space-x-2">
                           {receipt.extractedData ? (
                             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                              ✅ Processed
+                              ✅ Ready to use
                             </span>
                           ) : (
                             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                              ⏳ Pending
+                              ⏳ Processing needed
                             </span>
                           )}
                         </div>
@@ -548,7 +560,7 @@ const Receipts = () => {
                           onClick={() => handlePreview(receipt)}
                           className="text-blue-600 hover:text-blue-700 text-sm font-medium"
                         >
-                          Preview
+                          {receipt.extractedData ? 'Create Transaction' : 'View & Process'}
                         </button>
                         {!receipt.extractedData && (
                           <button
@@ -556,7 +568,7 @@ const Receipts = () => {
                             disabled={processingReceipt === receipt._id}
                             className="text-green-600 hover:text-green-700 text-sm font-medium disabled:opacity-50"
                           >
-                            {processingReceipt === receipt._id ? 'Processing...' : 'Process OCR'}
+                            {processingReceipt === receipt._id ? 'Processing...' : 'Extract Data'}
                           </button>
                         )}
                         <button
@@ -583,7 +595,7 @@ const Receipts = () => {
           setSelectedReceipt(null);
           setExtractedData(null);
         }}
-        title="Receipt Details"
+        title="Receipt Details & Transaction Creation"
       >
         {selectedReceipt && (
           <div className="space-y-6">
@@ -610,32 +622,32 @@ const Receipts = () => {
 
             {/* OCR Processing Section */}
             <div>
-              <h4 className="text-sm font-medium text-gray-700 mb-2">OCR Processing</h4>
+              <h4 className="text-sm font-medium text-gray-700 mb-2">Data Extraction Status</h4>
               {!selectedReceipt.extractedData ? (
                 <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
                   <div className="flex items-center space-x-2 mb-2">
                     <span className="text-yellow-600">⚠️</span>
-                    <span className="text-sm font-medium text-yellow-800">Not Processed</span>
+                    <span className="text-sm font-medium text-yellow-800">Data Not Extracted</span>
                   </div>
                   <p className="text-sm text-yellow-700 mb-3">
-                    This receipt hasn't been processed with OCR yet.
+                    Extract transaction details from this receipt to create a transaction automatically.
                   </p>
                   <button
                     onClick={() => handleProcessOCR(selectedReceipt._id)}
                     disabled={processingReceipt === selectedReceipt._id}
                     className="bg-yellow-600 text-white px-3 py-1 rounded text-sm font-medium hover:bg-yellow-700 disabled:opacity-50"
                   >
-                    {processingReceipt === selectedReceipt._id ? 'Processing...' : 'Process OCR'}
+                    {processingReceipt === selectedReceipt._id ? 'Extracting Data...' : 'Extract Transaction Data'}
                   </button>
                 </div>
               ) : (
                 <div className="bg-green-50 border border-green-200 rounded-lg p-4">
                   <div className="flex items-center space-x-2 mb-2">
                     <span className="text-green-600">✅</span>
-                    <span className="text-sm font-medium text-green-800">Processed</span>
+                    <span className="text-sm font-medium text-green-800">Data Extracted Successfully</span>
                   </div>
                   <p className="text-sm text-green-700">
-                    OCR processing completed successfully.
+                    Transaction details have been extracted and are ready to use.
                   </p>
                 </div>
               )}
@@ -644,7 +656,7 @@ const Receipts = () => {
             {/* Extracted Data */}
             {extractedData && (
               <div>
-                <h4 className="text-sm font-medium text-gray-700 mb-2">Extracted Information</h4>
+                <h4 className="text-sm font-medium text-gray-700 mb-2">Extracted Transaction Details</h4>
                 <div className="bg-gray-50 rounded-lg p-4 space-y-3">
                   {extractedData.amount && (
                     <div className="flex justify-between">
@@ -692,22 +704,26 @@ const Receipts = () => {
                 <div className="mt-4">
                   <button
                     onClick={() => handleCreateTransaction(extractedData)}
-                    className="w-full bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 font-medium"
+                    className="w-full bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 font-medium flex items-center justify-center space-x-2"
                   >
-                    Create Transaction from Receipt
+                    <span>💳</span>
+                    <span>Create Transaction from Receipt</span>
                   </button>
+                  <p className="text-xs text-gray-500 mt-2 text-center">
+                    This will take you to the transaction form with pre-filled details
+                  </p>
                 </div>
               </div>
             )}
 
             {/* Help Section */}
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <h4 className="text-sm font-medium text-blue-900 mb-2">💡 How it works</h4>
+              <h4 className="text-sm font-medium text-blue-900 mb-2">💡 How Receipt Processing Works</h4>
               <ul className="text-xs text-blue-800 space-y-1">
-                <li>• Upload receipt images (JPEG, PNG) or PDF files</li>
-                <li>• OCR technology extracts text and data automatically</li>
-                <li>• Review extracted information and create transactions</li>
-                                 <li>• Supported file formats: JPEG, PNG, PDF (max 10MB)</li>
+                <li>• Upload receipt images (JPEG, PNG) or PDF files (max 10MB)</li>
+                <li>• OCR technology automatically extracts transaction details</li>
+                <li>• Review extracted information and create transactions instantly</li>
+                <li>• All receipt data is linked to your transactions for record keeping</li>
               </ul>
             </div>
           </div>
@@ -717,4 +733,4 @@ const Receipts = () => {
   );
 };
 
-export default Receipts; 
+export default Receipts;
