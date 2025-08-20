@@ -7,7 +7,7 @@ const YOUR_BACKEND_URL = 'https://typeface-finance-app.onrender.com/api'; // Rep
 const BASE_URL = YOUR_BACKEND_URL || 'http://localhost:5000/api';
 
 // Create axios instance
-const api = axios.create({
+export const api = axios.create({
   baseURL: BASE_URL,
   timeout: 10000,
   headers: {
@@ -132,6 +132,15 @@ api.interceptors.response.use(
           status: error.response.status
         });
       }
+
+// Add this to the response interceptor
+if (error.response?.status === 403 && error.response.data?.error === 'RECEIPT_LIMIT_REACHED') {
+    return Promise.reject({
+        message: error.response.data?.message || 'Receipt upload limit reached',
+        status: 403,
+        error: 'RECEIPT_LIMIT_REACHED'
+    });
+}
       
       // Handle processing errors from 422 responses
       if (error.response.data?.processingError) {
@@ -142,6 +151,8 @@ api.interceptors.response.use(
         });
       }
     }
+
+
 
     // Return standardized error
     return Promise.reject({

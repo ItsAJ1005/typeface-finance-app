@@ -453,7 +453,7 @@ const Receipts = () => {
                   Choose File
                 </label>
                                  <p className="text-xs text-gray-500 mt-2">
-                   Supported formats: JPEG, PNG, PDF (Max 10MB)
+                   Supported formats: JPEG, PNG, PDF (Max 2 receipts, oldest deleted automatically)
                  </p>
               </div>
             ) : (

@@ -1,6 +1,10 @@
 /**
  * Smart categorization service for automatic expense categorization
  */
+const GeminiService = require('./geminiService');
+require('dotenv').config();
+
+const geminiService = new GeminiService(process.env.GEMINI_API_KEY);
 
 // Predefined categories
 const CATEGORIES = {
@@ -235,6 +239,58 @@ const analyzeSpendingPatterns = (transactions = []) => {
   };
 };
 
+// Get financial insights for a set of transactions
+async function getFinancialInsights(transactions, options = {}) {
+  try {
+    if (!process.env.GEMINI_API_KEY) {
+      throw new Error('GEMINI_API_KEY not found in environment variables');
+    }
+    
+    if (!transactions || transactions.length === 0) {
+      return { 
+        success: true, 
+        insights: "No transactions available for analysis. Add some transactions to get personalized insights." 
+      };
+    }
+
+    const insights = await geminiService.getFinancialInsights(transactions, options);
+    return { success: true, insights };
+  } catch (error) {
+    console.error('Error getting financial insights:', error);
+    return { 
+      success: false, 
+      error: error.message || 'Failed to generate insights',
+      details: error.stack
+    };
+  }
+}
+
+// Get financial advice based on user context
+async function getFinancialAdvice(userContext) {
+  try {
+    if (!process.env.GEMINI_API_KEY) {
+      throw new Error('GEMINI_API_KEY not found in environment variables');
+    }
+
+    if (!userContext) {
+      return {
+        success: true,
+        advice: "No financial context available. Add transactions to receive personalized advice."
+      };
+    }
+
+    const advice = await geminiService.getFinancialAdvice(userContext);
+    return { success: true, advice };
+  } catch (error) {
+    console.error('Error getting financial advice:', error);
+    return {
+      success: false,
+      error: error.message || 'Failed to generate advice',
+      details: error.stack
+    };
+  }
+}
+
 module.exports = {
   categorizeTransaction,
   getCategories,
@@ -242,5 +298,7 @@ module.exports = {
   getCategorySuggestions,
   analyzeSpendingPatterns,
   CATEGORIES,
-  MERCHANT_PATTERNS
+  MERCHANT_PATTERNS,
+  getFinancialInsights,
+  getFinancialAdvice
 };

@@ -85,6 +85,11 @@ const transactionSchema = new mongoose.Schema({
   isFromReceipt: {
     type: Boolean,
     default: false
+  },
+  lastAccessed: {
+    type: Date,
+    default: Date.now,
+    index: true
   }
 }, {
   timestamps: true,

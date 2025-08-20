@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import Header from '../components/common/Header';
+import AIInsights from '../components/AIInsights';
 import { transactionAPI } from '../services/api';
 
 const Dashboard = () => {
@@ -232,6 +233,12 @@ const Dashboard = () => {
           </div>
         </div>
 
+        {/* AI Insights Section */}
+        <div className="mt-8">
+          <h2 className="text-2xl font-semibold text-gray-900 mb-4">AI-Powered Insights</h2>
+          <AIInsights />
+        </div>
+
         {/* Quick Tips */}
         <div className="mt-8 bg-blue-50 border border-blue-200 rounded-lg p-6">
           <h3 className="text-lg font-semibold text-blue-900 mb-4">💡 Quick Tips for Evaluators</h3>
@@ -242,7 +249,7 @@ const Dashboard = () => {
             </div>
             <div>
               <p className="font-medium">• Use the filters to test pagination and search</p>
-              <p className="font-medium">• Check out the charts in the Analytics section</p>
+              <p className="font-medium">• Check out the charts and AI insights in the Analytics section</p>
             </div>
           </div>
         </div>

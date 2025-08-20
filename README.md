@@ -37,6 +37,14 @@ A production-ready, full-stack application that revolutionizes personal finance 
 - **Custom Reports** - Generate detled financial reports with custom date ranges
 - **Category Analytics** - Deep dive into spending patterns by category
 
+### 🧠 AI Features (GenAI)
+- **AI Financial Insights**: Analyzes the last 30 days of transactions and generates a structured report with Spending Patterns, High Expenditure Areas, Savings Opportunities, and Budget Recommendations. Output is rendered as Markdown in the UI with headings, lists, and bold text.
+- **Personalized Financial Advice**: Produces tailored recommendations based on recent income/expense mix, savings rate, and category breakdown.
+- **Receipt OCR + LLM Analysis**: OCR extracts amount, category, description, and date from uploaded receipts to prefill transactions; optional LLM analysis highlights merchant/category/tax flags.
+- **Category Suggestion (capability)**: Smart category suggestion via LLM is available and can be integrated into the add-transaction flow.
+
+> Implementation details: Uses Google Gemini (primary: `gemini-1.5-pro`, fallback: `gemini-1.5-flash`) with retry/backoff and model fallback for quota/rate-limits. Prompts enforce Indian Rupee (₹/INR) formatting; frontend renders AI output as Markdown via `react-markdown` + `remark-gfm`.
+
 ### 🔒 Enterprise-Grade Security
 - **JWT Authentication** - Secure token-based authentication system
 - **Rate Limiting** - Protection against brute force attacks

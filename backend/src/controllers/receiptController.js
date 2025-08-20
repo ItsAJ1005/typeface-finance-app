@@ -1,14 +1,14 @@
-const multer = require('multer');
-const path = require('path');
-const fs = require('fs').promises;
-const { v4: uuidv4 } = require('uuid');
-const ocrService = require('../services/ocrService');
-const Transaction = require('../models/Transaction');
+const multer = require("multer");
+const path = require("path");
+const fs = require("fs").promises;
+const { v4: uuidv4 } = require("uuid");
+const ocrService = require("../services/ocrService");
+const Transaction = require("../models/Transaction");
 
 // Configure multer for file uploads
 const storage = multer.diskStorage({
   destination: async (req, file, cb) => {
-    const uploadDir = 'uploads/receipts';
+    const uploadDir = "uploads/receipts";
     try {
       await fs.mkdir(uploadDir, { recursive: true });
       cb(null, uploadDir);
@@ -17,21 +17,27 @@ const storage = multer.diskStorage({
     }
   },
   filename: (req, file, cb) => {
-    const uniqueName = `${uuidv4()}-${Date.now()}${path.extname(file.originalname)}`;
+    const uniqueName = `${uuidv4()}-${Date.now()}${path.extname(
+      file.originalname
+    )}`;
     cb(null, uniqueName);
-  }
+  },
 });
 
 const fileFilter = (req, file, cb) => {
   // Accept images and PDFs
   const allowedTypes = /jpeg|jpg|png|pdf/;
-  const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+  const extname = allowedTypes.test(
+    path.extname(file.originalname).toLowerCase()
+  );
   const mimetype = allowedTypes.test(file.mimetype);
 
   if (mimetype && extname) {
     return cb(null, true);
   } else {
-    cb(new Error('Only image files (JPEG, JPG, PNG) and PDF files are allowed'));
+    cb(
+      new Error("Only image files (JPEG, JPG, PNG) and PDF files are allowed")
+    );
   }
 };
 
@@ -40,7 +46,7 @@ const upload = multer({
   limits: {
     fileSize: 10 * 1024 * 1024, // 10MB limit
   },
-  fileFilter
+  fileFilter,
 });
 
 // Upload and process receipt
@@ -49,8 +55,42 @@ const uploadReceipt = async (req, res) => {
     if (!req.file) {
       return res.status(400).json({
         success: false,
-        message: 'No file uploaded'
+        message: "No file uploaded",
       });
+    }
+
+    // Add this at the beginning of uploadReceipt function
+    const MAX_RECEIPTS_PER_USER = 2;
+
+    // Check receipt limit and implement LRU deletion
+    const existingReceipts = await Transaction.find({
+      userId: req.userId,
+      isFromReceipt: true,
+    }).sort({ lastAccessed: 1 }); // Sort by lastAccessed, oldest first
+
+    // If user has reached the limit, delete the oldest receipt
+    if (existingReceipts.length >= MAX_RECEIPTS_PER_USER) {
+      const oldestReceipt = existingReceipts[0]; // First one is the oldest
+      
+      try {
+        // Delete the oldest receipt from database
+        await Transaction.findByIdAndDelete(oldestReceipt._id);
+        
+        // Also delete the associated file if it exists
+        if (oldestReceipt.receiptUrl) {
+          const filePath = path.join(__dirname, '../../', oldestReceipt.receiptUrl);
+          try {
+            await fs.unlink(filePath);
+          } catch (fileError) {
+            console.warn('Could not delete old receipt file:', fileError.message);
+          }
+        }
+        
+        console.log(`Deleted oldest receipt ${oldestReceipt._id} to make room for new upload`);
+      } catch (deleteError) {
+        console.error('Error deleting oldest receipt:', deleteError);
+        // Continue with upload even if deletion fails
+      }
     }
 
     const filePath = req.file.path;
@@ -62,11 +102,11 @@ const uploadReceipt = async (req, res) => {
     if (!ocrResult.success) {
       // Clean up the uploaded file
       await ocrService.cleanupFile(filePath);
-      
+
       return res.status(400).json({
         success: false,
-        message: ocrResult.error || 'Failed to process receipt',
-        details: 'Could not extract transaction data from the uploaded receipt'
+        message: ocrResult.error || "Failed to process receipt",
+        details: "Could not extract transaction data from the uploaded receipt",
       });
     }
 
@@ -78,13 +118,13 @@ const uploadReceipt = async (req, res) => {
       receiptId,
       receiptUrl: fileUrl,
       ...ocrResult.data,
-      type: 'expense', // Receipts are typically expenses
-      isFromReceipt: true
+      type: "expense", // Receipts are typically expenses
+      isFromReceipt: true,
     };
 
     res.json({
       success: true,
-      message: 'Receipt processed successfully',
+      message: "Receipt processed successfully",
       data: {
         receiptId,
         receiptUrl: fileUrl,
@@ -94,31 +134,30 @@ const uploadReceipt = async (req, res) => {
           amount: ocrResult.data.amount,
           category: ocrResult.data.category,
           description: ocrResult.data.description,
-          date: ocrResult.data.date
-        }
-      }
+          date: ocrResult.data.date,
+        },
+      },
     });
-
   } catch (error) {
-    console.error('Receipt upload error:', error);
-    
+    console.error("Receipt upload error:", error);
+
     // Clean up file if it exists
     if (req.file) {
       await ocrService.cleanupFile(req.file.path);
     }
 
     if (error instanceof multer.MulterError) {
-      if (error.code === 'LIMIT_FILE_SIZE') {
+      if (error.code === "LIMIT_FILE_SIZE") {
         return res.status(400).json({
           success: false,
-          message: 'File too large. Maximum size is 10MB.'
+          message: "File too large. Maximum size is 10MB.",
         });
       }
     }
 
     res.status(500).json({
       success: false,
-      message: 'Failed to upload and process receipt'
+      message: "Failed to upload and process receipt",
     });
   }
 };
@@ -126,48 +165,42 @@ const uploadReceipt = async (req, res) => {
 // Create transaction from processed receipt
 const createTransactionFromReceipt = async (req, res) => {
   try {
-    const {
-      receiptId,
-      amount,
-      category,
-      description,
-      date,
-      receiptUrl
-    } = req.body;
+    const { receiptId, amount, category, description, date, receiptUrl } =
+      req.body;
 
     if (!receiptId || !amount || !category) {
       return res.status(400).json({
         success: false,
-        message: 'Missing required fields: receiptId, amount, and category are required'
+        message:
+          "Missing required fields: receiptId, amount, and category are required",
       });
     }
 
     // Create transaction
     const transaction = new Transaction({
       userId: req.userId,
-      type: 'expense',
+      type: "expense",
       amount: parseFloat(amount),
       category,
-      description: description || '',
+      description: description || "",
       date: date ? new Date(date) : new Date(),
       receiptId,
       receiptUrl,
-      isFromReceipt: true
+      isFromReceipt: true,
     });
 
     await transaction.save();
 
     res.status(201).json({
       success: true,
-      message: 'Transaction created from receipt successfully',
-      data: { transaction }
+      message: "Transaction created from receipt successfully",
+      data: { transaction },
     });
-
   } catch (error) {
-    console.error('Create transaction from receipt error:', error);
+    console.error("Create transaction from receipt error:", error);
     res.status(500).json({
       success: false,
-      message: 'Failed to create transaction from receipt'
+      message: "Failed to create transaction from receipt",
     });
   }
 };
@@ -180,30 +213,33 @@ const getReceipt = async (req, res) => {
     // Find transaction associated with this receipt
     const transaction = await Transaction.findOne({
       receiptId,
-      userId: req.userId
+      userId: req.userId,
     });
 
     if (!transaction) {
       return res.status(404).json({
         success: false,
-        message: 'Receipt not found'
+        message: "Receipt not found",
       });
     }
+
+    // Update lastAccessed for LRU
+    transaction.lastAccessed = Date.now();
+    await transaction.save();
 
     res.json({
       success: true,
       data: {
         receiptId,
         receiptUrl: transaction.receiptUrl,
-        transaction
-      }
+        transaction,
+      },
     });
-
   } catch (error) {
-    console.error('Get receipt error:', error);
+    console.error("Get receipt error:", error);
     res.status(500).json({
       success: false,
-      message: 'Failed to retrieve receipt'
+      message: "Failed to retrieve receipt",
     });
   }
 };
@@ -216,13 +252,13 @@ const deleteReceipt = async (req, res) => {
     // Find and delete transaction
     const transaction = await Transaction.findOneAndDelete({
       receiptId,
-      userId: req.userId
+      userId: req.userId,
     });
 
     if (!transaction) {
       return res.status(404).json({
         success: false,
-        message: 'Receipt not found'
+        message: "Receipt not found",
       });
     }
 
@@ -234,14 +270,13 @@ const deleteReceipt = async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Receipt and associated transaction deleted successfully'
+      message: "Receipt and associated transaction deleted successfully",
     });
-
   } catch (error) {
-    console.error('Delete receipt error:', error);
+    console.error("Delete receipt error:", error);
     res.status(500).json({
       success: false,
-      message: 'Failed to delete receipt'
+      message: "Failed to delete receipt",
     });
   }
 };
@@ -254,13 +289,13 @@ const reprocessReceipt = async (req, res) => {
     // Find transaction with this receipt
     const transaction = await Transaction.findOne({
       receiptId,
-      userId: req.userId
+      userId: req.userId,
     });
 
     if (!transaction || !transaction.receiptUrl) {
       return res.status(404).json({
         success: false,
-        message: 'Receipt not found'
+        message: "Receipt not found",
       });
     }
 
@@ -272,13 +307,13 @@ const reprocessReceipt = async (req, res) => {
     if (!ocrResult.success) {
       return res.status(400).json({
         success: false,
-        message: ocrResult.error || 'Failed to reprocess receipt'
+        message: ocrResult.error || "Failed to reprocess receipt",
       });
     }
 
     res.json({
       success: true,
-      message: 'Receipt reprocessed successfully',
+      message: "Receipt reprocessed successfully",
       data: {
         receiptId,
         originalTransaction: transaction,
@@ -286,17 +321,16 @@ const reprocessReceipt = async (req, res) => {
           amount: ocrResult.data.amount,
           category: ocrResult.data.category,
           description: ocrResult.data.description,
-          date: ocrResult.data.date
+          date: ocrResult.data.date,
         },
-        confidence: ocrResult.data.confidence
-      }
+        confidence: ocrResult.data.confidence,
+      },
     });
-
   } catch (error) {
-    console.error('Reprocess receipt error:', error);
+    console.error("Reprocess receipt error:", error);
     res.status(500).json({
       success: false,
-      message: 'Failed to reprocess receipt'
+      message: "Failed to reprocess receipt",
     });
   }
 };
@@ -307,5 +341,5 @@ module.exports = {
   createTransactionFromReceipt,
   getReceipt,
   deleteReceipt,
-  reprocessReceipt
+  reprocessReceipt,
 };
