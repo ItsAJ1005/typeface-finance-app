@@ -1,7 +1,7 @@
 {
   "name": "finance-app-backend",
   "version": "1.0.0",
-  "description": "Personal Finance Assistant Backend API by AJ Harsh Vardhan for typefaceAI assignment.",
+  "description": "Personal Finance Assistant Backend API by AJ Harsh Vardhan.",
   "main": "src/app.js",
   "scripts": {
     "start": "node src/app.js",
