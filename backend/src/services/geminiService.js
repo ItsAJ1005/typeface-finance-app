@@ -7,21 +7,22 @@ class GeminiService {
         }
         this.genAI = new GoogleGenerativeAI(apiKey);
         // Primary and fallback models
-        this.primaryModelName = process.env.GEMINI_MODEL || 'gemini-1.5-pro';
-        this.fallbackModelName = process.env.GEMINI_FALLBACK_MODEL || 'gemini-1.5-flash';
+        // Using faster model as primary for quicker responses
+        this.primaryModelName = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
+        this.fallbackModelName = process.env.GEMINI_FALLBACK_MODEL || 'gemini-1.5-pro';
         
         this.generationConfig = {
-            temperature: 0.7,
-            topK: 40,
-            topP: 0.95,
-            maxOutputTokens: 2048,
+            temperature: 0.5,    // Lower temperature for more focused responses
+            topK: 20,           // Reduced for faster generation
+            topP: 0.8,          // Adjusted for better speed/quality balance
+            maxOutputTokens: 1024, // Reduced max tokens
         };
-        // Slightly lighter config for fallback to minimize quota usage
+        // Fallback config with higher quality but slower
         this.fallbackGenerationConfig = {
             temperature: 0.7,
             topK: 40,
             topP: 0.95,
-            maxOutputTokens: 1024,
+            maxOutputTokens: 2048,
         };
     }
 
@@ -29,7 +30,7 @@ class GeminiService {
         return new Promise(resolve => setTimeout(resolve, ms));
     }
 
-    async _generateWithRetry(payload, { attemptsPerModel = 2, initialBackoffMs = 1500 } = {}) {
+    async _generateWithRetry(payload, { attemptsPerModel = 2, initialBackoffMs = 1000 } = {}) {
         const models = [
             { name: this.primaryModelName, config: this.generationConfig },
             { name: this.fallbackModelName, config: this.fallbackGenerationConfig }
