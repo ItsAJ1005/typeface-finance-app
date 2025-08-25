@@ -9,7 +9,7 @@ jobs:
   ping:
     runs-on: ubuntu-latest
     steps:
-      - name: Conditional Ping for Render Backend
+      - name: Conditional Ping for Render Backend Free Tier
         run: |
           HOUR=$(TZ=Asia/Kolkata date +'%H')
 
@@ -19,7 +19,7 @@ jobs:
           if [ $HOUR -ge 7 ] || [ $HOUR -lt 1 ]; then
             # Active hours: Ping every 10 minutes
             echo "Active hours ($HOUR IST) → Pinging Render backend..."
-            curl -s https://your-backend.onrender.com/health || true
+            curl -s https://typeface-finance-app.onrender.com/api/health || true
           else
             # Night hours: Ping only if minute divisible by 30
             MIN=$(date +'%M')
