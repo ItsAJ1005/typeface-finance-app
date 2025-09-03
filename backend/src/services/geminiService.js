@@ -85,13 +85,16 @@ class GeminiService {
 
             const dateRangeLabel = options.dateRangeLabel || 'the last 30 days';
 
-            // Prepare transactions data for analysis
+            // Prepare transactions data for analysis - sanitize sensitive information
             const sanitizedTransactions = transactions.map(t => ({
                 type: t.type,
                 amount: t.amount,
                 category: t.category,
                 date: t.date,
-                description: t.description
+                // Mask potentially sensitive information in descriptions
+                description: t.description?.replace(/\b(?:\d{4}[-\s]?){4}\b/g, '****') // Mask card numbers
+                    .replace(/\b\d{10,}\b/g, '****') // Mask long numbers (account/phone)
+                    .replace(/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g, '****@****') // Mask emails
             }));
 
             // Build structured prompt
@@ -133,8 +136,18 @@ class GeminiService {
                 throw new Error('No transaction provided for categorization');
             }
 
+            // Sanitize transaction data before sending to AI
+            const sanitizedTransaction = {
+                amount: transaction.amount,
+                type: transaction.type,
+                // Mask sensitive information in description
+                description: transaction.description?.replace(/\b(?:\d{4}[-\s]?){4}\b/g, '****')
+                    .replace(/\b\d{10,}\b/g, '****')
+                    .replace(/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g, '****@****')
+            };
+
             const prompt = `Given this transaction:
-                ${JSON.stringify(transaction, null, 2)}
+                ${JSON.stringify(sanitizedTransaction, null, 2)}
                 Suggest the most appropriate category from these options:
                 - Food & Dining
                 - Shopping
@@ -168,10 +181,20 @@ class GeminiService {
             }
 
             // Build structured prompt
+            // Sanitize user context before sending to AI
+            const sanitizedContext = {
+                monthlyIncome: userContext.monthlyIncome,
+                monthlyExpenses: userContext.monthlyExpenses,
+                savingsRate: userContext.savingsRate,
+                expensesByCategory: userContext.expensesByCategory,
+                transactionCount: userContext.transactionCount
+                // Explicitly exclude any sensitive fields
+            };
+
             const parts = [
                 { text: "You are a professional financial advisor. Based on this user's financial context:\n\n" },
                 { text: "Always use Indian Rupee (₹) and INR when mentioning currency. Do not use $. Format examples: ₹1,000, ₹12,34,567.\n\n" },
-                { text: JSON.stringify(userContext, null, 2) + "\n\n" },
+                { text: JSON.stringify(sanitizedContext, null, 2) + "\n\n" },
                 { text: "Please provide detailed advice in these sections:\n" },
                 { text: "1. Personalized Financial Recommendations\n" },
                 { text: "2. Specific Action Items (with timeline)\n" },
