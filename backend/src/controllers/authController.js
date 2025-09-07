@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const { validationResult } = require('express-validator');
+const passport = require('passport');
 
 // Generate JWT token
 const generateToken = (userId) => {
@@ -186,9 +187,33 @@ const updateProfile = async (req, res) => {
   }
 };
 
+// Google OAuth Success Handler
+const googleAuthSuccess = (req, res) => {
+  if (req.user) {
+    const token = generateToken(req.user._id);
+    res.redirect(`${process.env.CLIENT_URL}/auth/success?token=${token}`);
+  } else {
+    res.redirect(`${process.env.CLIENT_URL}/auth/failed`);
+  }
+};
+
+// Google OAuth Failure Handler
+const googleAuthFailed = (req, res) => {
+  res.redirect(`${process.env.CLIENT_URL}/auth/failed`);
+};
+
+// Logout
+const logout = (req, res) => {
+  req.logout();
+  res.json({ success: true, message: 'Logged out successfully' });
+};
+
 module.exports = {
   register,
   login,
   getProfile,
-  updateProfile
+  updateProfile,
+  googleAuthSuccess,
+  googleAuthFailed,
+  logout
 };

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { authAPI } from '../services/api';
 import { login } from '../utils/auth';
+import GoogleSignInButton from '../components/common/GoogleSignInButton';
 
 const Login = ({ setIsAuth }) => {
   const navigate = useNavigate();
@@ -95,30 +96,40 @@ const Login = ({ setIsAuth }) => {
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
         <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
           {/* Demo Login Button */}
-          <div className="mb-6">
+          <div className="mt-4">
             <button
+              type="button"
               onClick={handleDemoLogin}
               disabled={loading}
-              className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 transition-colors duration-200"
+              className="w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
             >
-              {loading ? (
-                <div className="flex items-center">
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                  Signing in...
-                </div>
-              ) : (
-                <div className="flex items-center">
-                  <span className="mr-2">🚀</span>
-                  Quick Demo Login
-                </div>
-              )}
+              {loading ? 'Loading...' : 'Try Demo Account'}
             </button>
-            <p className="mt-2 text-xs text-gray-500 text-center">
-              Use demo credentials for quick evaluation
-            </p>
-            <p className="mt-1 text-xs text-gray-400 text-center">
-              Email: demo@finance.com | Password: demo123
-            </p>
+          </div>
+
+          <div className="mt-6">
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-gray-300"></div>
+              </div>
+              <div className="relative flex justify-center text-sm">
+                <span className="px-2 bg-white text-gray-500">Or continue with</span>
+              </div>
+            </div>
+
+            <div className="mt-4">
+              <GoogleSignInButton 
+                onSuccess={(data) => {
+                  setIsAuth(true);
+                  navigate('/dashboard');
+                }}
+                onError={(error) => {
+                  setError(error.message || 'Google sign-in failed');
+                  setLoading(false);
+                }}
+                buttonText="Sign in with Google"
+              />
+            </div>
           </div>
 
           <div className="relative">

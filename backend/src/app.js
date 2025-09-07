@@ -3,6 +3,8 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
+const session = require('express-session');
+const passport = require('passport');
 require('dotenv').config();
 
 const authRoutes = require('./routes/auth');
@@ -14,22 +16,68 @@ const app = express();
 
 // Security middleware
 app.use(helmet());
-const allowedOrigins = [
-  'http://localhost:5173',
-  'https://typeface-finance-app.vercel.app'
-];
 
-app.use(cors({
+// Session configuration
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'your-session-secret',
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: process.env.NODE_ENV === 'production',
+    httpOnly: true,
+    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+  }
+}));
+
+// Initialize Passport
+app.use(passport.initialize());
+app.use(passport.session());
+
+// CORS configuration
+const corsOptions = {
   origin: function (origin, callback) {
+    const allowedOrigins = [
+      'http://localhost:5173',
+      'http://127.0.0.1:5173',
+      'https://typeface-finance-app.vercel.app'
+    ];
+    
     // Allow requests with no origin (like mobile apps or curl)
-    if (!origin || allowedOrigins.includes(origin)) {
+    if (!origin || allowedOrigins.some(allowed => 
+      origin.startsWith(allowed) || 
+      origin.includes('accounts.google.com') ||
+      origin.includes('localhost') ||
+      origin.includes('127.0.0.1')
+    )) {
       callback(null, true);
     } else {
+      console.log('CORS blocked origin:', origin);
       callback(new Error('Not allowed by CORS'));
     }
   },
-  credentials: true
-}));
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: [
+    'Content-Type', 
+    'Authorization', 
+    'X-Requested-With',
+    'Accept',
+    'Origin',
+    'X-HTTP-Method-Override'
+  ],
+  exposedHeaders: [
+    'set-cookie',
+    'Content-Length',
+    'X-Foo',
+    'X-Bar'
+  ],
+  preflightContinue: false,
+  optionsSuccessStatus: 204
+};
+
+// Enable CORS pre-flight across the board
+app.options('*', cors(corsOptions));
+app.use(cors(corsOptions));
 
 // Rate limiting
 const limiter = rateLimit({
@@ -39,8 +87,16 @@ const limiter = rateLimit({
 app.use(limiter);
 
 // Body parsing middleware
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({
+  verify: (req, res, buf) => {
+    // Store the raw body for signature verification if needed
+    req.rawBody = buf.toString();
+  }
+}));
 app.use(express.urlencoded({ extended: true }));
+
+// Special route for Google OAuth that needs to handle raw text
+app.use('/auth/google', express.text({ type: 'text/*' }));
 
 // Static files for uploaded receipts
 app.use('/uploads', express.static('uploads'));
