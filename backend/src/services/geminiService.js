@@ -8,7 +8,7 @@ class GeminiService {
         this.genAI = new GoogleGenerativeAI(apiKey);
         // Primary and fallback models
         // Using faster model as primary for quicker responses
-        this.primaryModelName = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
+        this.primaryModelName = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
         this.fallbackModelName = process.env.GEMINI_FALLBACK_MODEL || 'gemini-1.5-pro';
         
         this.generationConfig = {

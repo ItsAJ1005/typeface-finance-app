@@ -19,19 +19,49 @@ const Dashboard = () => {
 
   const fetchDashboardData = async () => {
     try {
-      // Get recent transactions
-      const transactionsResponse = await transactionAPI.getAll({ limit: 5 });
-      setRecentTransactions(transactionsResponse.data.transactions || []);
-
-      // Get analytics for summary
-      const analyticsResponse = await transactionAPI.getAnalytics();
-      const analytics = analyticsResponse.data;
+      // Get recent transactions including those from recurring sources
+      const response = await transactionAPI.getAll({ 
+        limit: 5,
+        includeRecurring: true
+      });
+      console.log('Transactions Response:', response);
       
-      if (analytics) {
+      // Extract transactions from the nested response structure
+      // Response format: { success: true, data: { transactions: [...], pagination: {...} } }
+      let transactions = [];
+      if (response?.data?.transactions && Array.isArray(response.data.transactions)) {
+        transactions = response.data.transactions;
+      }
+      
+      console.log('Processed transactions:', transactions);
+      setRecentTransactions(transactions);
+      
+      // Get analytics including recurring transactions
+      console.log('Fetching analytics with includeRecurring: true');
+      const analyticsResponse = await transactionAPI.getAnalytics({
+        includeRecurring: true
+      });
+      
+      console.log('Analytics Response:', analyticsResponse);
+      
+      if (analyticsResponse?.data) {
+        const { totalIncome, totalExpenses } = analyticsResponse.data;
+        
+        const summaryData = {
+          totalIncome: parseFloat(totalIncome) || 0,
+          totalExpenses: parseFloat(totalExpenses) || 0,
+          balance: (parseFloat(totalIncome) || 0) - (parseFloat(totalExpenses) || 0)
+        };
+        
+        console.log('Setting summary:', summaryData);
+        setSummary(summaryData);
+      } else {
+        console.warn('Invalid analytics response structure:', analyticsResponse);
+        // Set default values if response structure is unexpected
         setSummary({
-          totalIncome: analytics.totalIncome || 0,
-          totalExpenses: analytics.totalExpenses || 0,
-          balance: (analytics.totalIncome || 0) - (analytics.totalExpenses || 0)
+          totalIncome: 0,
+          totalExpenses: 0,
+          balance: 0
         });
       }
     } catch (error) {
@@ -185,7 +215,7 @@ const Dashboard = () => {
           </div>
           
           <div className="p-6">
-            {recentTransactions.length === 0 ? (
+            {!Array.isArray(recentTransactions) || recentTransactions.length === 0 ? (
               <div className="text-center py-8">
                 <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
                   <span className="text-2xl">📝</span>

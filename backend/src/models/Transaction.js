@@ -86,6 +86,17 @@ const transactionSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  isFromRecurring: {
+    type: Boolean,
+    default: false,
+    index: true
+  },
+  recurringTransactionId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'RecurringTransaction',
+    default: null,
+    index: true
+  },
   lastAccessed: {
     type: Date,
     default: Date.now,
@@ -107,16 +118,58 @@ transactionSchema.index({ userId: 1, type: 1, date: -1 });
 transactionSchema.index({ userId: 1, category: 1, date: -1 });
 
 // Static method to get user analytics
-transactionSchema.statics.getAnalytics = async function(userId, startDate, endDate) {
+transactionSchema.statics.getAnalytics = async function(userId, startDate, endDate, includeRecurring = false) {
+  console.log('getAnalytics called with:', { userId, startDate, endDate, includeRecurring });
+  
+  const matchStage = {
+    userId: new mongoose.Types.ObjectId(userId),
+    date: {
+      $gte: new Date(startDate),
+      $lte: new Date(endDate)
+    }
+  };
+
+  // Exclude recurring transactions unless explicitly included
+  if (!includeRecurring) {
+    matchStage.isFromRecurring = { $ne: true };
+  }
+  
+  console.log('Match stage:', JSON.stringify(matchStage, null, 2));
+  console.log('Date range:', {
+    startDate: new Date(startDate),
+    endDate: new Date(endDate)
+  });
+
+  try {
+    // First, check if there are any matching documents
+    const count = await this.countDocuments(matchStage);
+    console.log(`Found ${count} matching transactions`);
+    
+    if (count === 0) {
+      console.log('No transactions found for the given criteria');
+      return [{
+        totalsByType: [],
+        categoryBreakdown: [],
+        monthlyTrend: []
+      }];
+    }
+    
+    // Log sample of matching documents
+    const sample = await this.find(matchStage).limit(2);
+    console.log('Sample transactions:', sample.map(t => ({
+      _id: t._id,
+      type: t.type,
+      amount: t.amount,
+      date: t.date,
+      isFromRecurring: t.isFromRecurring
+    })));
+  } catch (err) {
+    console.error('Error checking transaction count:', err);
+  }
+
   const pipeline = [
     {
-      $match: {
-        userId: new mongoose.Types.ObjectId(userId),
-        date: {
-          $gte: new Date(startDate),
-          $lte: new Date(endDate)
-        }
-      }
+      $match: matchStage
     },
     {
       $facet: {
