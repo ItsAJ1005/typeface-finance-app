@@ -11,6 +11,9 @@ const authRoutes = require('./routes/auth');
 const transactionRoutes = require('./routes/transactions');
 const receiptRoutes = require('./routes/receipts');
 const aiRoutes = require('./routes/ai');
+const recurringTransactionRoutes = require('./routes/recurringTransactionRoutes');
+const scheduleRecurringTransactions = require('./utils/recurringTransactionScheduler');
+const logger = require('./utils/logger');
 
 const app = express();
 
@@ -95,19 +98,68 @@ app.use(express.json({
 }));
 app.use(express.urlencoded({ extended: true }));
 
+// Mount routes
+app.use('/api/auth', authRoutes);
+app.use('/api/transactions', transactionRoutes);
+app.use('/api/receipts', receiptRoutes);
+app.use('/api/ai', aiRoutes);
+app.use('/api/recurring-transactions', recurringTransactionRoutes);
+
 // Special route for Google OAuth that needs to handle raw text
 app.use('/auth/google', express.text({ type: 'text/*' }));
 
 // Static files for uploaded receipts
 app.use('/uploads', express.static('uploads'));
 
+// MongoDB connection with retry logic
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/finance-app';
+
+const connectWithRetry = () => {
+  return mongoose.connect(MONGODB_URI, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+    serverSelectionTimeoutMS: 5000,
+    socketTimeoutMS: 45000,
+  });
+};
+
+// Handle MongoDB connection events
+mongoose.connection.on('error', (err) => {
+  logger.error('MongoDB connection error:', err);
+  // Try to reconnect after 5 seconds
+  setTimeout(() => connectWithRetry(), 5000);
+});
+
+mongoose.connection.on('connected', () => {
+  logger.info('Successfully connected to MongoDB');
+  
+  // Initialize recurring transaction scheduler after successful connection
+  if (process.env.NODE_ENV !== 'test') {
+    try {
+      scheduleRecurringTransactions();
+      logger.info('Recurring transaction scheduler started');
+    } catch (error) {
+      logger.error('Failed to start recurring transaction scheduler:', error);
+    }
+  }
+});
+
+mongoose.connection.on('disconnected', () => {
+  logger.warn('MongoDB disconnected');
+});
+
+// Initial connection attempt
+connectWithRetry().catch(err => {
+  logger.error('Initial MongoDB connection failed:', err);
+  process.exit(1);
+});
+
 // Routes
-app.use('/api/auth', authRoutes);
-app.use('/api/transactions', transactionRoutes);
-app.use('/api/receipts', receiptRoutes);
-app.use('/api/ai', aiRoutes);
-app.use('/api/receipts', receiptRoutes);
-app.use('/api/ai', aiRoutes);
+app.use('/api/v1/auth', authRoutes);
+app.use('/api/v1/transactions', transactionRoutes);
+app.use('/api/v1/receipts', receiptRoutes);
+app.use('/api/v1/ai', aiRoutes);
+app.use('/api/v1/recurring-transactions', recurringTransactionRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {

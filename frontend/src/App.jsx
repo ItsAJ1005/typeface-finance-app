@@ -8,6 +8,7 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import Transactions from './pages/Transactions';
+import RecurringTransactions from './pages/RecurringTransactions';
 import Receipts from './pages/Receipts';
 import Analysis from './pages/Analysis';
 
@@ -63,6 +64,11 @@ function App() {
           <Route path="/transactions/new" element={
             <ProtectedRoute isAuth={isAuth}>
               <Transactions />
+            </ProtectedRoute>
+          } />
+          <Route path="/recurring-transactions" element={
+            <ProtectedRoute isAuth={isAuth}>
+              <RecurringTransactions />
             </ProtectedRoute>
           } />
           <Route path="/receipts" element={

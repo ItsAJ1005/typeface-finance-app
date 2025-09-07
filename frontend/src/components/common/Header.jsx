@@ -34,6 +34,12 @@ const Header = () => {
               Transactions
             </Link>
             <Link 
+              to="/recurring-transactions" 
+              className="text-gray-600 hover:text-gray-900 font-medium"
+            >
+              Recurring
+            </Link>
+            <Link 
               to="/receipts" 
               className="text-gray-600 hover:text-gray-900 font-medium"
             >
