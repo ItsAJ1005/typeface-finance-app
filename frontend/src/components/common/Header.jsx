@@ -89,7 +89,7 @@ const Header = () => {
         <div className="px-4 py-3 space-y-1">
           <Link to="/dashboard" className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:bg-gray-100">Dashboard</Link>
           <Link to="/transactions" className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:bg-gray-100">Transactions</Link>
-          <Link to="/recurring-transactions" className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:bg-gray-100">Recurring</Link>
+          <Link to="/recurring-transactions" className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:bg-gray-100">AutoPay</Link>
           <Link to="/receipts" className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:bg-gray-100">Receipts</Link>
           <Link to="/analysis" className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:bg-gray-100">Analysis</Link>
         </div>

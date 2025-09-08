@@ -1,14 +1,17 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Bar } from 'react-chartjs-2';
+import { Bar, Line } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
   CategoryScale,
   LinearScale,
   BarElement,
+  LineElement,
+  PointElement,
   Title,
   Tooltip,
-  Legend
+  Legend,
+  Filler
 } from 'chart.js';
 import Header from '../components/common/Header';
 import { transactionAPI } from '../services/api';
@@ -19,9 +22,12 @@ ChartJS.register(
   CategoryScale,
   LinearScale,
   BarElement,
+  LineElement,
+  PointElement,
   Title,
   Tooltip,
-  Legend
+  Legend,
+  Filler
 );
 
 const Analysis = () => {
@@ -40,58 +46,35 @@ const Analysis = () => {
       setLoading(true);
       setError('');
       
-      console.log('Fetching analytics with period:', period);
-      // Include transactions in the response for weekly pattern calculation
       const response = await transactionAPI.getAnalytics({ 
         period,
         includeTransactions: true 
       });
-      console.log('Raw analytics response:', response);
       
-      // transactionAPI.getAnalytics returns the data object directly
       if (response) {
-        // Log the full response structure for debugging
-        console.log('Full analytics response structure:', JSON.stringify(response, null, 2));
-        
-        const responseData = response;
+        // Process response data (same as before)
         const { 
           summary = { totalIncome: 0, totalExpense: 0, balance: 0, period: {} }, 
           categoryBreakdown = [], 
           monthlyTrend = [],
           heatmapData: heatmapDataResponse = [],
           totalTransactions = 0 
-        } = responseData;
+        } = response;
         
-        console.log('Heatmap data from backend:', heatmapDataResponse);
-        
-        console.log('Heatmap data from response:', heatmapDataResponse);
-        
-        console.group('Processed Analytics Data');
-        console.log('Summary:', summary);
-        console.log('Category Breakdown:', categoryBreakdown);
-        console.log('Monthly Trend:', monthlyTrend);
-        console.log('Total Transactions:', totalTransactions);
-        console.groupEnd();
-        
-        // Process monthly trend data
         const processedMonthlyTrend = monthlyTrend.map(month => ({
           ...month,
           month: new Date(month.month + '-01').toLocaleString('default', { month: 'short', year: 'numeric' })
         }));
 
-        // Process category breakdown
         const processedCategoryBreakdown = [...categoryBreakdown]
           .sort((a, b) => b.amount - a.amount)
           .map(cat => ({
             ...cat,
-            percentage: cat.percentage / 100 // Convert to decimal for consistency
+            percentage: cat.percentage / 100
           }));
           
-        // Process heatmap data from response or use empty array if not available
-        const heatmapData = responseData.heatmapData || [];
-        console.log('Heatmap data from backend:', heatmapData);
+        const heatmapData = response.heatmapData || [];
         
-        // Compute period days if backend didn't include it
         const periodStart = summary?.period?.startDate ? new Date(summary.period.startDate) : null;
         const periodEnd = summary?.period?.endDate ? new Date(summary.period.endDate) : null;
         const computedDays = (periodStart && periodEnd && !isNaN(periodStart) && !isNaN(periodEnd))
@@ -106,7 +89,6 @@ const Analysis = () => {
           totalExpenses: summary.totalExpense || 0,
           balance: summary.balance || 0,
           totalTransactions,
-          // Calculate derived metrics
           expenseToIncomeRatio: summary.totalIncome > 0 
             ? (summary.totalExpense / summary.totalIncome) 
             : 0,
@@ -118,11 +100,9 @@ const Analysis = () => {
             0
           ),
           daysAnalyzed: summary.period?.days || computedDays || 0,
-          // Process heatmap data from backend or synthesize from transactions
           heatmapData: (() => {
-            const transactions = Array.isArray(responseData.transactions) ? responseData.transactions : [];
+            const transactions = Array.isArray(response.transactions) ? response.transactions : [];
             if (!Array.isArray(heatmapDataResponse) || heatmapDataResponse.length === 0) {
-              // Build from transactions (expenses only)
               const byDate = new Map();
               transactions.forEach(tx => {
                 if (tx.type !== 'expense' || !tx.date) return;
@@ -135,7 +115,6 @@ const Analysis = () => {
               return Array.from(byDate.values());
             }
             
-            console.log('Processing heatmap data:', heatmapDataResponse);
             return heatmapDataResponse.map(item => {
               const amount = Number(item.amount) || 0;
               const transactionsList = Array.isArray(item.transactions) ? item.transactions : [];
@@ -147,28 +126,22 @@ const Analysis = () => {
               };
             });
           })(),
-          // Calculate weekly spending pattern from transactions
           weeklyPattern: (() => {
-            // Initialize days of week with 0 amount
             const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
             const weeklyPattern = days.map(day => ({ day, amount: 0 }));
             
-            // Get all transactions from the current period
-            const transactions = responseData.transactions || [];
+            const transactions = response.transactions || [];
             
-            // Calculate weekly pattern
             transactions.forEach(tx => {
               if (tx.type === 'expense') {
                 const date = new Date(tx.date);
-                const dayOfWeek = date.getDay(); // 0 (Sunday) to 6 (Saturday)
+                const dayOfWeek = date.getDay();
                 weeklyPattern[dayOfWeek].amount += Math.abs(tx.amount);
               }
             });
             
-            console.log('Weekly pattern calculated:', weeklyPattern);
             return weeklyPattern;
           })(),
-          // Compute scaling helpers and derived lists
           maxDailySpending: 0,
           topCategories: [],
           recommendations: [
@@ -176,7 +149,7 @@ const Analysis = () => {
             'Review your monthly trends to identify areas for potential savings.'
           ]
         };
-        // Post-process derived fields that depend on previous calculations
+        
         analyticsData.maxDailySpending = Math.max(
           ...(analyticsData.weeklyPattern || []).map(d => d.amount || 0),
           0
@@ -185,11 +158,9 @@ const Analysis = () => {
           .slice()
           .sort((a, b) => (b.amount || 0) - (a.amount || 0));
         
-        console.log('Setting analytics state:', analyticsData);
         setAnalytics(analyticsData);
         return;
       } else {
-        // Set default values if no data is available
         setAnalytics({
           totalIncome: 0,
           totalExpenses: 0,
@@ -203,11 +174,6 @@ const Analysis = () => {
     } catch (error) {
       console.error('Error fetching analytics:', error);
       const errorMessage = error.response?.data?.message || error.message || 'Failed to fetch analytics';
-      console.error('Error details:', {
-        status: error.response?.status,
-        data: error.response?.data,
-        message: errorMessage
-      });
       
       setError(errorMessage);
       setAnalytics({
@@ -254,7 +220,6 @@ const Analysis = () => {
     return colors[index % colors.length];
   };
 
-  // Helpers
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('en-IN', {
       style: 'currency',
@@ -278,7 +243,7 @@ const Analysis = () => {
   const SpendingHeatmap = ({ data = [] }) => {
     if (!data || data.length === 0) {
       return (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <div className="bg-white rounded-xl shadow-sm p-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Spending Heatmap</h3>
           <p className="text-gray-500 text-center py-8">No spending data available for the selected period</p>
         </div>
@@ -286,21 +251,16 @@ const Analysis = () => {
     }
 
     try {
-      // Process and validate data
       const today = new Date();
-      today.setHours(23, 59, 59, 999); // End of day
+      today.setHours(23, 59, 59, 999);
       
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
       thirtyDaysAgo.setHours(0, 0, 0, 0);
       
-      console.log('Processing heatmap data:', data);
-      
-      // Create a map of date to data point
       const dateMap = new Map();
       const processedData = [];
       
-      // Process the incoming data
       data.forEach(item => {
         try {
           if (!item || !item.date) return;
@@ -326,7 +286,6 @@ const Analysis = () => {
         }
       });
       
-      // Generate all dates in the range, filling in missing dates with zero amounts
       for (let d = new Date(thirtyDaysAgo); d <= today; d.setDate(d.getDate() + 1)) {
         const dateStr = d.toISOString().split('T')[0];
         const existingData = dateMap.get(dateStr);
@@ -347,48 +306,33 @@ const Analysis = () => {
         }
       }
       
-      // Calculate min and max for color scaling
       const amounts = processedData.map(d => d.amount).filter(amount => amount > 0);
       const minAmount = amounts.length > 0 ? Math.min(...amounts) : 0;
       const maxAmount = amounts.length > 0 ? Math.max(...amounts) : 1;
       const range = maxAmount - minAmount;
       
-      console.log('Processed heatmap data:', {
-        dateRange: `${thirtyDaysAgo.toISOString().split('T')[0]} to ${today.toISOString().split('T')[0]}`,
-        dataPoints: processedData.length,
-        nonZeroDataPoints: amounts.length,
-        minAmount,
-        maxAmount,
-        range
-      });
-      
-      // Group data by weeks for rendering
       const weeks = [];
       let currentWeek = Array(7).fill(null);
       
       processedData.forEach(day => {
-        const dayOfWeek = day.dayOfWeek; // 0 (Sunday) to 6 (Saturday)
+        const dayOfWeek = day.dayOfWeek;
         currentWeek[dayOfWeek] = day;
         
-        // If it's Saturday, push the current week and start a new one
         if (dayOfWeek === 6) {
           weeks.push([...currentWeek]);
           currentWeek = Array(7).fill(null);
         }
       });
       
-      // Push the last week if it's not empty
       if (currentWeek.some(day => day !== null)) {
         weeks.push([...currentWeek]);
       }
       
-      // Function to get color based on amount
       const getHeatmapColor = (amount) => {
         if (amount <= 0) return 'bg-gray-100';
         
         const intensity = range > 0 ? (amount - minAmount) / range : 0;
         
-        // Define color scale from light to dark red
         if (intensity < 0.2) return 'bg-red-100';
         if (intensity < 0.4) return 'bg-red-200';
         if (intensity < 0.6) return 'bg-red-300';
@@ -396,7 +340,6 @@ const Analysis = () => {
         return 'bg-red-500';
       };
       
-      // Render tooltip content
       const renderTooltipContent = (day) => {
         if (!day || day.amount <= 0) return 'No spending';
         
@@ -413,7 +356,7 @@ const Analysis = () => {
       };
       
       return (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <div className="flex justify-between items-center mb-4">
             <div>
               <h3 className="text-lg font-semibold text-gray-900">Spending Heatmap</h3>
@@ -426,7 +369,6 @@ const Analysis = () => {
           
           <div className="overflow-x-auto py-2 -mx-2">
             <div className="inline-block min-w-full px-2">
-              {/* Day of week headers */}
               <div className="grid grid-cols-7 gap-1 mb-2">
                 {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, i) => (
                   <div key={i} className="text-xs text-gray-500 text-center py-1 w-8 font-medium">
@@ -435,7 +377,6 @@ const Analysis = () => {
                 ))}
               </div>
               
-              {/* Heatmap cells */}
               <div className="grid grid-cols-7 gap-1">
                 {weeks.flatMap((week, weekIndex) =>
                   week.map((day, dayIndex) => {
@@ -450,7 +391,7 @@ const Analysis = () => {
                     
                     const isToday = day.dateStr === new Date().toISOString().split('T')[0];
                     const dayClasses = [
-                      'w-8 h-8 rounded-sm relative group',
+                      'w-8 h-8 rounded-sm relative group transition-all duration-200 hover:scale-105',
                       getHeatmapColor(day.amount),
                       isToday ? 'ring-2 ring-offset-1 ring-gray-400' : ''
                     ].join(' ');
@@ -481,7 +422,6 @@ const Analysis = () => {
             </div>
           </div>
           
-          {/* Legend */}
           <div className="mt-6">
             <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
               <span>Less</span>
@@ -505,7 +445,6 @@ const Analysis = () => {
             </div>
           </div>
           
-          {/* Date range */}
           {processedData.length > 0 && (
             <div className="text-xs text-gray-400 text-center mt-3">
               {formatDate(processedData[0].date)} - {formatDate(processedData[processedData.length - 1].date)}
@@ -517,14 +456,13 @@ const Analysis = () => {
     } catch (error) {
       console.error('Error rendering heatmap:', error);
       return (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Spending Heatmap</h3>
           <p className="text-red-500 text-center py-4">Error loading heatmap data. Please try again later.</p>
           <p className="text-xs text-gray-500 text-center">Error: {error.message}</p>
         </div>
       );
     }
-
   };
 
   if (loading) {
@@ -545,7 +483,7 @@ const Analysis = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="mb-8">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div>
               <h1 className="text-3xl font-bold text-gray-900 mb-2">Financial Analysis</h1>
               <p className="text-gray-600">
@@ -554,15 +492,15 @@ const Analysis = () => {
             </div>
             
             {/* Period Selector */}
-            <div className="flex space-x-2">
+            <div className="flex flex-wrap gap-2">
               {['7d', '30d', '90d', '6m', '1y'].map((p) => (
                 <button
                   key={p}
                   onClick={() => handlePeriodChange(p)}
-                  className={`px-4 py-2 rounded-md text-sm font-medium ${
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
                     period === p
-                      ? 'bg-red-600 text-white'
-                      : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                      ? 'bg-red-600 text-white shadow-md'
+                      : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 shadow-sm'
                   }`}
                 >
                   {getPeriodLabel(p)}
@@ -574,8 +512,17 @@ const Analysis = () => {
 
         {/* Error Message */}
         {error && (
-          <div className="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
-            {error}
+          <div className="mb-6 bg-red-50 border-l-4 border-red-500 p-4 rounded">
+            <div className="flex items-start">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <p className="text-sm text-red-700">{error}</p>
+              </div>
+            </div>
           </div>
         )}
 
@@ -583,11 +530,11 @@ const Analysis = () => {
           <div className="space-y-8">
             {/* Summary Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <div className="bg-white rounded-xl shadow-sm p-6 transition-all duration-300 hover:shadow-md">
                 <div className="flex items-center">
                   <div className="flex-shrink-0">
-                    <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center">
-                      <span className="text-red-600 text-lg">💸</span>
+                    <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
+                      <span className="text-red-600 text-xl">💸</span>
                     </div>
                   </div>
                   <div className="ml-4">
@@ -597,13 +544,18 @@ const Analysis = () => {
                     </p>
                   </div>
                 </div>
+                <div className="mt-4 pt-4 border-t border-gray-100">
+                  <p className="text-xs text-gray-500">
+                    {analytics.daysAnalyzed} day period
+                  </p>
+                </div>
               </div>
 
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <div className="bg-white rounded-xl shadow-sm p-6 transition-all duration-300 hover:shadow-md">
                 <div className="flex items-center">
                   <div className="flex-shrink-0">
-                    <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
-                      <span className="text-green-600 text-lg">💰</span>
+                    <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+                      <span className="text-green-600 text-xl">💰</span>
                     </div>
                   </div>
                   <div className="ml-4">
@@ -613,13 +565,18 @@ const Analysis = () => {
                     </p>
                   </div>
                 </div>
+                <div className="mt-4 pt-4 border-t border-gray-100">
+                  <p className="text-xs text-gray-500">
+                    {formatCurrency(analytics.averageDailySpending || 0)} avg daily
+                  </p>
+                </div>
               </div>
 
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <div className="bg-white rounded-xl shadow-sm p-6 transition-all duration-300 hover:shadow-md">
                 <div className="flex items-center">
                   <div className="flex-shrink-0">
-                    <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                      <span className="text-blue-600 text-lg">📊</span>
+                    <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                      <span className="text-blue-600 text-xl">📊</span>
                     </div>
                   </div>
                   <div className="ml-4">
@@ -633,49 +590,59 @@ const Analysis = () => {
                     </p>
                   </div>
                 </div>
+                <div className="mt-4 pt-4 border-t border-gray-100">
+                  <p className="text-xs text-gray-500">
+                    {analytics.totalIncome > 0 
+                      ? `${Math.max(0, (analytics.balance / analytics.totalIncome) * 100).toFixed(1)}% savings rate`
+                      : 'No income data'
+                    }
+                  </p>
+                </div>
               </div>
 
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <div className="bg-white rounded-xl shadow-sm p-6 transition-all duration-300 hover:shadow-md">
                 <div className="flex items-center">
                   <div className="flex-shrink-0">
-                    <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
-                      <span className="text-purple-600 text-lg">📈</span>
+                    <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center">
+                      <span className="text-purple-600 text-xl">📈</span>
                     </div>
                   </div>
                   <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-600">Savings Rate</p>
+                    <p className="text-sm font-medium text-gray-600">Transactions</p>
                     <p className="text-2xl font-bold text-gray-900">
-                      {analytics.totalIncome > 0 
-                        ? Math.max(0, (analytics.balance / analytics.totalIncome) * 100).toFixed(1) + '%'
-                        : '0%'
-                      }
+                      {analytics.totalTransactions || 0}
                     </p>
                   </div>
+                </div>
+                <div className="mt-4 pt-4 border-t border-gray-100">
+                  <p className="text-xs text-gray-500">
+                    {formatCurrency(analytics.largestTransaction || 0)} largest transaction
+                  </p>
                 </div>
               </div>
             </div>
 
-            {/* Heatmap Section */}
+            {/* Heatmap and Category Breakdown */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
               <SpendingHeatmap data={analytics.heatmapData || []} />
               
               {/* Category Breakdown */}
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                <div className="flex items-center justify-between mb-4">
+              <div className="bg-white rounded-xl shadow-sm p-6">
+                <div className="flex items-center justify-between mb-6">
                   <h3 className="text-lg font-semibold text-gray-900">Expense by Category</h3>
-                  <span className="text-sm text-gray-500">
+                  <span className="text-sm text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
                     {analytics.categoryBreakdown.length} categories
                   </span>
                 </div>
                 {analytics.categoryBreakdown && analytics.categoryBreakdown.length > 0 ? (
-                  <div className="space-y-4">
+                  <div className="space-y-5">
                     {analytics.categoryBreakdown.map((category, index) => {
                       const percentage = (category.percentage * 100).toFixed(1);
                       return (
                         <div key={category.name} className="space-y-2">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center">
-                              <div className={`w-3 h-3 rounded-full ${getCategoryColor(index)} mr-2`}></div>
+                              <div className={`w-4 h-4 rounded-full ${getCategoryColor(index)} mr-3`}></div>
                               <span className="text-sm font-medium text-gray-900">
                                 {category.name}
                               </span>
@@ -689,12 +656,11 @@ const Analysis = () => {
                               </span>
                             </div>
                           </div>
-                          <div className="w-full bg-gray-100 rounded-full h-2">
+                          <div className="w-full bg-gray-100 rounded-full h-2.5">
                             <div 
-                              className={`h-2 rounded-full ${getCategoryColor(index).replace('bg-', 'bg-opacity-80 bg-')}`}
+                              className={`h-2.5 rounded-full ${getCategoryColor(index)} transition-all duration-700 ease-out`}
                               style={{
-                                width: `${percentage}%`,
-                                transition: 'width 0.5s ease-in-out'
+                                width: `${percentage}%`
                               }}
                             />
                           </div>
@@ -711,46 +677,94 @@ const Analysis = () => {
             {/* Charts Section */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
               {/* Monthly Trend */}
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Monthly Trend</h3>
+              <div className="bg-white rounded-xl shadow-sm p-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-6">Monthly Trend</h3>
                 {analytics.monthlyTrend && analytics.monthlyTrend.length > 0 ? (
-                  <div className="space-y-4">
-                    {analytics.monthlyTrend.map((month) => (
-                      <div key={month.month} className="space-y-2">
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm font-medium text-gray-900">{month.month}</span>
-                          <span className={`text-sm font-medium ${
-                            month.balance >= 0 ? 'text-green-600' : 'text-red-600'
-                          }`}>
-                            {formatCurrency(month.balance)}
-                          </span>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4 text-sm">
-                          <div className="flex items-center">
-                            <span className="w-16 text-gray-600">Income:</span>
-                            <span className="text-green-600 font-medium">
-                              {formatCurrency(month.income || 0)}
-                            </span>
-                          </div>
-                          <div className="flex items-center">
-                            <span className="w-16 text-gray-600">Expense:</span>
-                            <span className="text-red-600 font-medium">
-                              {formatCurrency(month.expense || 0)}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="w-full bg-gray-200 rounded-full h-1.5">
-                          {month.income > 0 && (
-                            <div 
-                              className="bg-green-500 h-1.5 rounded-full" 
-                              style={{
-                                width: `${Math.min(100, (month.income / (month.income + month.expense)) * 100)}%`
-                              }}
-                            />
-                          )}
-                        </div>
-                      </div>
-                    ))}
+                  <div className="h-80">
+                    <Line
+                      data={{
+                        labels: analytics.monthlyTrend.map(month => month.month),
+                        datasets: [
+                          {
+                            label: 'Income',
+                            data: analytics.monthlyTrend.map(month => month.income || 0),
+                            borderColor: 'rgb(16, 185, 129)',
+                            backgroundColor: 'rgba(16, 185, 129, 0.10)',
+                            fill: true,
+                            tension: 0.35,
+                            borderWidth: 2,
+                            pointRadius: 2,
+                            pointHoverRadius: 4,
+                          },
+                          {
+                            label: 'Expenses',
+                            data: analytics.monthlyTrend.map(month => month.expense || 0),
+                            borderColor: 'rgb(239, 68, 68)',
+                            backgroundColor: 'rgba(239, 68, 68, 0.10)',
+                            fill: true,
+                            tension: 0.35,
+                            borderWidth: 2,
+                            pointRadius: 2,
+                            pointHoverRadius: 4,
+                          },
+                          {
+                            label: 'Balance',
+                            data: analytics.monthlyTrend.map(month => (month.income || 0) - (month.expense || 0)),
+                            borderColor: 'rgb(59, 130, 246)',
+                            backgroundColor: 'rgba(59, 130, 246, 0.08)',
+                            fill: true,
+                            tension: 0.35,
+                            borderWidth: 2,
+                            borderDash: [6, 4],
+                            pointRadius: 0,
+                            pointHoverRadius: 3,
+                          }
+                        ]
+                      }}
+                      options={{
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                          legend: {
+                            position: 'top',
+                            labels: { color: '#374151' }
+                          },
+                          tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                            callbacks: {
+                              label: function(context) {
+                                return `${context.dataset.label}: ${formatCurrency(context.raw)}`;
+                              },
+                              footer: function(items) {
+                                try {
+                                  const income = items.find(i => i.dataset.label === 'Income')?.raw || 0;
+                                  const expense = items.find(i => i.dataset.label === 'Expenses')?.raw || 0;
+                                  const balance = income - expense;
+                                  return `Net: ${formatCurrency(balance)}`;
+                                } catch (e) { return ''; }
+                              }
+                            }
+                          }
+                        },
+                        scales: {
+                          y: {
+                            beginAtZero: true,
+                            ticks: {
+                              callback: function(value) {
+                                return formatCurrency(value);
+                              },
+                              color: '#6b7280'
+                            },
+                            grid: { color: '#f3f4f6' }
+                          },
+                          x: {
+                            ticks: { color: '#6b7280' },
+                            grid: { display: false }
+                          }
+                        }
+                      }}
+                    />
                   </div>
                 ) : (
                   <p className="text-gray-500 text-center py-8">No trend data available</p>
@@ -758,26 +772,47 @@ const Analysis = () => {
               </div>
 
               {/* Weekly Spending Pattern */}
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Weekly Spending Pattern</h3>
+              <div className="bg-white rounded-xl shadow-sm p-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-6">Weekly Spending Pattern</h3>
                 {analytics.weeklyPattern && analytics.weeklyPattern.length > 0 ? (
-                  <div className="space-y-4">
-                    {analytics.weeklyPattern.map((day) => (
-                      <div key={day.day} className="flex items-center justify-between">
-                        <span className="text-sm font-medium text-gray-700">{day.day}</span>
-                        <div className="flex items-center space-x-4">
-                          <div className="flex-1 bg-gray-200 rounded-full h-2 mr-4">
-                            <div 
-                              className="bg-red-500 h-2 rounded-full" 
-                              style={{ width: `${Math.min(100, (day.amount / (analytics.maxDailySpending || 1)) * 100)}%` }}
-                            ></div>
-                          </div>
-                          <span className="text-sm font-semibold text-gray-900">
-                            {formatCurrency(day.amount)}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
+                  <div className="h-80">
+                    <Bar
+                      data={{
+                        labels: analytics.weeklyPattern.map(day => day.day),
+                        datasets: [{
+                          label: 'Spending',
+                          data: analytics.weeklyPattern.map(day => day.amount),
+                          backgroundColor: 'rgba(239, 68, 68, 0.7)',
+                          borderRadius: 4,
+                        }]
+                      }}
+                      options={{
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                          legend: {
+                            display: false
+                          },
+                          tooltip: {
+                            callbacks: {
+                              label: function(context) {
+                                return formatCurrency(context.raw);
+                              }
+                            }
+                          }
+                        },
+                        scales: {
+                          y: {
+                            beginAtZero: true,
+                            ticks: {
+                              callback: function(value) {
+                                return formatCurrency(value);
+                              }
+                            }
+                          }
+                        }
+                      }}
+                    />
                   </div>
                 ) : (
                   <p className="text-gray-500 text-center py-8">No weekly pattern data available</p>
@@ -788,10 +823,10 @@ const Analysis = () => {
             {/* Detailed Insights */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* Top Spending Categories */}
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <div className="bg-white rounded-xl shadow-sm p-6">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Top Spending Categories</h3>
                 {analytics.topCategories && analytics.topCategories.length > 0 ? (
-                  <div>
+                  <div className="h-80">
                     <Bar
                       data={{
                         labels: analytics.topCategories.slice(0, 5).map(cat => cat.name),
@@ -799,20 +834,21 @@ const Analysis = () => {
                           label: 'Spending Amount',
                           data: analytics.topCategories.slice(0, 5).map(cat => cat.amount),
                           backgroundColor: [
-                            'rgba(239, 68, 68, 0.8)',   // red-500
-                            'rgba(249, 115, 22, 0.8)',  // orange-500
-                            'rgba(245, 158, 11, 0.8)',  // amber-500
-                            'rgba(16, 185, 129, 0.8)',  // green-500
-                            'rgba(59, 130, 246, 0.8)',  // blue-500
+                            'rgba(239, 68, 68, 0.8)',
+                            'rgba(249, 115, 22, 0.8)',
+                            'rgba(245, 158, 11, 0.8)',
+                            'rgba(16, 185, 129, 0.8)',
+                            'rgba(59, 130, 246, 0.8)',
                           ],
                           borderColor: [
-                            'rgb(239, 68, 68)',   // red-500
-                            'rgb(249, 115, 22)',  // orange-500
-                            'rgb(245, 158, 11)',  // amber-500
-                            'rgb(16, 185, 129)',  // green-500
-                            'rgb(59, 130, 246)',  // blue-500
+                            'rgb(239, 68, 68)',
+                            'rgb(249, 115, 22)',
+                            'rgb(245, 158, 11)',
+                            'rgb(16, 185, 129)',
+                            'rgb(59, 130, 246)',
                           ],
-                          borderWidth: 1
+                          borderWidth: 1,
+                          borderRadius: 4,
                         }]
                       }}
                       options={{
@@ -839,7 +875,6 @@ const Analysis = () => {
                           }
                         }
                       }}
-                      style={{ height: '300px' }}
                     />
                   </div>
                 ) : (
@@ -848,36 +883,62 @@ const Analysis = () => {
               </div>
 
               {/* Spending Patterns */}
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Spending Patterns</h3>
-                <div className="space-y-4">
-                  <div className="flex justify-between">
-                    <span className="text-sm text-gray-600">Average Daily Spending</span>
+              <div className="bg-white rounded-xl shadow-sm p-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-6">Spending Patterns</h3>
+                <div className="space-y-5">
+                  <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                    <div className="flex items-center">
+                      <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center mr-3">
+                        <span className="text-blue-600 text-sm">📅</span>
+                      </div>
+                      <span className="text-sm text-gray-600">Average Daily Spending</span>
+                    </div>
                     <span className="text-sm font-semibold text-gray-900">
                       {formatCurrency(analytics.averageDailySpending || 0)}
                     </span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm text-gray-600">Largest Transaction</span>
+                  <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                    <div className="flex items-center">
+                      <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center mr-3">
+                        <span className="text-red-600 text-sm">🔥</span>
+                      </div>
+                      <span className="text-sm text-gray-600">Largest Transaction</span>
+                    </div>
                     <span className="text-sm font-semibold text-gray-900">
                       {formatCurrency(analytics.largestTransaction || 0)}
                     </span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm text-gray-600">Total Transactions</span>
+                  <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                    <div className="flex items-center">
+                      <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center mr-3">
+                        <span className="text-green-600 text-sm">🔢</span>
+                      </div>
+                      <span className="text-sm text-gray-600">Total Transactions</span>
+                    </div>
                     <span className="text-sm font-semibold text-gray-900">
                       {analytics.totalTransactions || 0}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                    <div className="flex items-center">
+                      <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center mr-3">
+                        <span className="text-purple-600 text-sm">📆</span>
+                      </div>
+                      <span className="text-sm text-gray-600">Days Analyzed</span>
+                    </div>
+                    <span className="text-sm font-semibold text-gray-900">
+                      {analytics.daysAnalyzed || 0}
                     </span>
                   </div>
                 </div>
               </div>
 
               {/* Financial Health */}
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Financial Health</h3>
-                <div className="space-y-4">
-                  <div className="space-y-1">
-                    <div className="flex justify-between">
+              <div className="bg-white rounded-xl shadow-sm p-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-6">Financial Health</h3>
+                <div className="space-y-6">
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center">
                       <span className="text-sm font-medium text-gray-700">Expense to Income Ratio</span>
                       <span className={`text-sm font-semibold ${
                         analytics.expenseToIncomeRatio > 0.8 ? 'text-red-600' : 
@@ -886,9 +947,9 @@ const Analysis = () => {
                         {(analytics.expenseToIncomeRatio * 100).toFixed(1)}%
                       </span>
                     </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div className="w-full bg-gray-200 rounded-full h-2.5">
                       <div 
-                        className={`h-2 rounded-full ${
+                        className={`h-2.5 rounded-full ${
                           analytics.expenseToIncomeRatio > 0.8 ? 'bg-red-500' : 
                           analytics.expenseToIncomeRatio > 0.5 ? 'bg-yellow-500' : 'bg-green-500'
                         }`}
@@ -906,7 +967,7 @@ const Analysis = () => {
                     </p>
                   </div>
 
-                  <div className="pt-2 border-t border-gray-100">
+                  <div className="pt-4 border-t border-gray-100">
                     <div className="flex justify-between items-center">
                       <div>
                         <p className="text-sm font-medium text-gray-700">Savings Rate</p>
@@ -926,7 +987,7 @@ const Analysis = () => {
                     </div>
                   </div>
 
-                  <div className="pt-2 border-t border-gray-100">
+                  <div className="pt-4 border-t border-gray-100">
                     <div className="flex justify-between items-center">
                       <div>
                         <p className="text-sm font-medium text-gray-700">Analysis Period</p>
@@ -948,15 +1009,17 @@ const Analysis = () => {
 
             {/* Recommendations */}
             {analytics.recommendations && analytics.recommendations.length > 0 && (
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">💡 Financial Recommendations</h3>
-                <div className="space-y-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {analytics.recommendations.map((recommendation, index) => (
-                    <div key={index} className="flex items-start space-x-3">
-                      <div className="flex-shrink-0 w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center">
-                        <span className="text-blue-600 text-xs font-bold">{index + 1}</span>
+                    <div key={index} className="bg-blue-50 p-4 rounded-lg border border-blue-100">
+                      <div className="flex items-start space-x-3">
+                        <div className="flex-shrink-0 w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center">
+                          <span className="text-blue-600 text-xs font-bold">{index + 1}</span>
+                        </div>
+                        <p className="text-sm text-blue-700">{recommendation}</p>
                       </div>
-                      <p className="text-sm text-gray-700">{recommendation}</p>
                     </div>
                   ))}
                 </div>
@@ -966,7 +1029,7 @@ const Analysis = () => {
         )}
 
         {!analytics && !loading && (
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
             <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <span className="text-2xl">📊</span>
             </div>
@@ -974,6 +1037,9 @@ const Analysis = () => {
             <p className="text-gray-600 mb-4">
               Start adding transactions to see detailed financial analysis and insights.
             </p>
+            <button className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 transition-colors">
+              Add Transaction
+            </button>
           </div>
         )}
       </div>

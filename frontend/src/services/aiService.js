@@ -5,7 +5,8 @@ export const getFinancialInsights = async () => {
     const response = await api.get('/ai/insights', { timeout: 65000 });
     // The interceptor returns { success: true, data: { ... } }
     if (response && response.success) {
-      return response.data;
+      // response.data here is the backend's `data` field (a string). Wrap it for the UI.
+      return { data: response.data };
     }
     throw new Error('Failed to fetch financial insights');
   } catch (error) {
@@ -19,7 +20,8 @@ export const getFinancialAdvice = async () => {
     const response = await api.get('/ai/advice', { timeout: 65000 });
     // The interceptor returns { success: true, data: { ... } }
     if (response && response.success) {
-      return response.data;
+      // response.data is a string from backend; wrap it for consistent consumer shape
+      return { data: response.data };
     }
     throw new Error('Failed to fetch financial advice');
   } catch (error) {
