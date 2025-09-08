@@ -1,7 +1,6 @@
 # 💰 Personal Finance Assistant
 
 [![Live Link](https://img.shields.io/badge/LIVE_DEMO-🚀-FF5757?style=for-the-badge&logo=react&logoColor=white)](https://typeface-finance-app.vercel.app/)
-
 [![Frontend Status](https://img.shields.io/github/deployments/ItsAJ1005/typeface-finance-app/production?style=for-the-badge&logo=vercel&label=vercel&logoColor=white)](https://typeface-finance-app.vercel.app)
 [![Backend Status](https://img.shields.io/badge/API-Online_✨-blue?style=for-the-badge&logo=render&logoColor=white)](https://typeface-finance-app.onrender.com)
 
