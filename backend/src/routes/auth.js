@@ -1,6 +1,14 @@
 const express = require('express');
+const passport = require('passport');
 const { body } = require('express-validator');
-const { register, login, getProfile, updateProfile } = require('../controllers/authController');
+const { 
+  register, 
+  login, 
+  getProfile, 
+  updateProfile, 
+  logout 
+} = require('../controllers/authController');
+const { googleAuth, googleAuthCallback } = require('../controllers/googleAuthController');
 const { auth } = require('../middleware/auth');
 
 const router = express.Router();
@@ -35,5 +43,12 @@ router.post('/register', registerValidation, register);
 router.post('/login', loginValidation, login);
 router.get('/profile', auth, getProfile);
 router.put('/profile', auth, updateProfile);
+
+// Google OAuth Routes
+router.post('/google', googleAuth);
+router.get('/google/callback', googleAuthCallback);
+
+// Logout route
+router.get('/logout', auth, logout);
 
 module.exports = router;

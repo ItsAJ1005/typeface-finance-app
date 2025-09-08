@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const Transaction = require('../models/Transaction');
 const { validationResult } = require('express-validator');
 
@@ -58,7 +59,14 @@ const getTransactions = async (req, res) => {
     } = req.query;
 
     // Build filter object
-    const filter = { userId: req.userId };
+    const filter = { 
+      userId: req.userId,
+      // Include all transactions by default, including recurring ones
+      $or: [
+        { isFromRecurring: { $exists: false } }, // Regular transactions
+        { isFromRecurring: false } // Explicitly included recurring transactions
+      ]
+    };
 
     if (type && ['income', 'expense'].includes(type)) {
       filter.type = type;
@@ -239,21 +247,57 @@ const deleteTransaction = async (req, res) => {
 // Get analytics data
 const getAnalytics = async (req, res) => {
   try {
-    const {
-      startDate = new Date(new Date().getFullYear(), new Date().getMonth(), 1),
-      endDate = new Date()
-    } = req.query;
+    // Parse dates with proper timezone handling
+    let startDate = req.query.startDate 
+      ? new Date(req.query.startDate) 
+      : new Date();
+    startDate.setUTCHours(0, 0, 0, 0);
+    
+    let endDate = req.query.endDate 
+      ? new Date(req.query.endDate)
+      : new Date();
+    endDate.setUTCHours(23, 59, 59, 999);
+    
+    const includeRecurring = req.query.includeRecurring !== 'false'; // true by default
+    const period = req.query.period || '30d'; // Default to 30 days
 
-    const analytics = await Transaction.getAnalytics(req.userId, startDate, endDate);
+    console.log('Analytics request details:', {
+      userId: req.userId,
+      startDate: startDate.toISOString(),
+      endDate: endDate.toISOString(),
+      period,
+      includeRecurring
+    });
+    
+    // Check if transactions should be included in the response
+    const includeTransactions = req.query.includeTransactions === 'true';
+    
+    const analytics = await Transaction.getAnalytics(
+      req.userId, 
+      startDate, 
+      endDate,
+      includeRecurring,
+      includeTransactions
+    );
+    
+    console.log('Analytics query complete. Include transactions:', includeTransactions);
+    
+    console.log('Raw analytics result from model:', JSON.stringify(analytics, null, 2));
     
     // Process the aggregation results
     const result = analytics[0];
+    console.log('First result from analytics:', JSON.stringify(result, null, 2));
     
     // Calculate totals by type
     const totals = { income: 0, expense: 0 };
-    result.totalsByType.forEach(item => {
-      totals[item._id] = item.total;
-    });
+    if (result?.totalsByType) {
+      result.totalsByType.forEach(item => {
+        console.log(`Processing total for type ${item._id}:`, item.total);
+        totals[item._id] = item.total;
+      });
+    } else {
+      console.warn('No totalsByType in analytics result');
+    }
 
     // Format category breakdown
     const categoryBreakdown = result.categoryBreakdown.map(item => ({
@@ -263,26 +307,122 @@ const getAnalytics = async (req, res) => {
       percentage: totals.expense > 0 ? ((item.total / totals.expense) * 100).toFixed(1) : 0
     }));
 
-    // Format monthly trend
-    const monthlyTrend = {};
-    result.monthlyTrend.forEach(item => {
-      const key = `${item._id.year}-${String(item._id.month).padStart(2, '0')}`;
-      if (!monthlyTrend[key]) {
-        monthlyTrend[key] = { income: 0, expense: 0 };
+    // Format monthly trend data
+    const monthlyTrend = [];
+    const monthlyData = {};
+    
+    if (result.monthlyTrend) {
+      result.monthlyTrend.forEach(item => {
+        const monthKey = `${item._id.year}-${String(item._id.month).padStart(2, '0')}`;
+        if (!monthlyData[monthKey]) {
+          monthlyData[monthKey] = {
+            month: monthKey,
+            income: 0,
+            expense: 0
+          };
+        }
+        monthlyData[monthKey][item._id.type] = item.total;
+      });
+      
+      // Convert to array and sort by month
+      Object.values(monthlyData).forEach(month => {
+        monthlyTrend.push({
+          month: month.month,
+          income: month.income,
+          expense: month.expense,
+          balance: month.income - month.expense
+        });
+      });
+      
+      monthlyTrend.sort((a, b) => a.month.localeCompare(b.month));
+    }
+    
+    // Generate heatmap data from transactions
+    console.log('Querying transactions for heatmap between:', startDate, 'and', endDate);
+    console.log('User ID:', req.userId);
+    
+    // Use the same date range as the analytics query
+    const heatmapQuery = {
+      userId: new mongoose.Types.ObjectId(req.userId),
+      date: { 
+        $gte: new Date(startDate),
+        $lte: new Date(endDate)
+      },
+      type: 'expense',
+      amount: { $gt: 0 }
+    };
+    
+    console.log('Heatmap query:', JSON.stringify({
+      ...heatmapQuery,
+      userId: '...',
+      date: {
+        $gte: startDate.toISOString(),
+        $lte: endDate.toISOString()
       }
-      monthlyTrend[key][item._id.type] = item.total;
+    }, null, 2));
+    
+    const transactions = await Transaction.find(heatmapQuery)
+      .select('amount date category description')
+      .sort({ date: 1 })
+      .lean();
+      
+    console.log(`Found ${transactions.length} expense transactions for heatmap`);
+    if (transactions.length > 0) {
+      console.log('Sample transaction:', {
+        date: transactions[0].date,
+        amount: transactions[0].amount,
+        category: transactions[0].category
+      });
+    }
+    
+    // Group transactions by date
+    const dailySpending = {};
+    
+    // Initialize all dates in range with 0 amount
+    const currentDate = new Date(startDate);
+    while (currentDate <= endDate) {
+      const dateStr = currentDate.toISOString().split('T')[0];
+      dailySpending[dateStr] = {
+        date: dateStr,
+        amount: 0,
+        transactions: []
+      };
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+    
+    // Add actual transaction data
+    transactions.forEach(tx => {
+      const dateStr = new Date(tx.date).toISOString().split('T')[0];
+      if (!dailySpending[dateStr]) {
+        dailySpending[dateStr] = {
+          date: dateStr,
+          amount: 0,
+          transactions: []
+        };
+      }
+      dailySpending[dateStr].amount += Math.abs(Number(tx.amount));
+      dailySpending[dateStr].transactions.push({
+        amount: Math.abs(Number(tx.amount)),
+        category: tx.category,
+        description: tx.description || ''
+      });
     });
-
-    const monthlyData = Object.keys(monthlyTrend)
-      .sort()
-      .map(month => ({
-        month,
-        income: monthlyTrend[month].income,
-        expense: monthlyTrend[month].expense,
-        balance: monthlyTrend[month].income - monthlyTrend[month].expense
+    
+    // Convert to array and sort by date
+    const heatmapData = Object.values(dailySpending)
+      .sort((a, b) => new Date(a.date) - new Date(b.date))
+      .map(day => ({
+        ...day,
+        amount: Number(day.amount.toFixed(2))
       }));
+    
+    console.log('Generated heatmap data points:', heatmapData.length);
+    if (heatmapData.length > 0) {
+      console.log('Sample heatmap data:', JSON.stringify(heatmapData[0], null, 2));
+    }
 
-    res.json({
+    // Prepare response data
+    const responseData = {
       success: true,
       data: {
         summary: {
@@ -290,14 +430,25 @@ const getAnalytics = async (req, res) => {
           totalExpense: totals.expense,
           balance: totals.income - totals.expense,
           period: {
-            startDate: new Date(startDate),
-            endDate: new Date(endDate)
+            start: startDate,
+            end: endDate,
+            days: Math.ceil((new Date(endDate) - new Date(startDate)) / (1000 * 60 * 60 * 24)) + 1
           }
         },
         categoryBreakdown,
-        monthlyTrend: monthlyData
+        monthlyTrend,
+        heatmapData,
+        totalTransactions: (totals.income_count || 0) + (totals.expense_count || 0)
       }
-    });
+    };
+
+    // Include transactions in the response if requested
+    if (includeTransactions && result.transactions) {
+      responseData.data.transactions = result.transactions;
+      console.log(`Included ${result.transactions.length} transactions in response`);
+    }
+
+    res.json(responseData);
 
   } catch (error) {
     console.error('Get analytics error:', error);

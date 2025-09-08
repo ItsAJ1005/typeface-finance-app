@@ -1,17 +1,21 @@
 import axios from 'axios';
 import { getToken, removeToken } from '../utils/auth';
 
-const YOUR_BACKEND_URL = 'https://typeface-finance-app.onrender.com/api'; // Replace with your backend URL
+// const YOUR_BACKEND_URL = 'https://typeface-finance-app.onrender.com/api'; // Replace with your backend URL
+const YOUR_BACKEND_URL = 'http://localhost:5000/api'; // Replace with your backend URL
 
 // Base URL from environment or fallback
 const BASE_URL = YOUR_BACKEND_URL || 'http://localhost:5000/api';
 
-// Create axios instance
-export const api = axios.create({
-  baseURL: BASE_URL,
-  timeout: 10000,
+// Create axios instance with base URL and headers
+const api = axios.create({
+  baseURL: YOUR_BACKEND_URL,
   headers: {
     'Content-Type': 'application/json',
+  },
+  // Ensure we get the full response
+  validateStatus: function (status) {
+    return status >= 200 && status < 300; // default
   },
 });
 
@@ -29,12 +33,18 @@ api.interceptors.request.use(
   }
 );
 
-// Response interceptor for error handling
+// Response interceptor to handle errors and token refresh
 api.interceptors.response.use(
   (response) => {
-    return response.data;
+    // The backend returns { success: true, data: { ... } }
+    // We want to keep this structure for consistent handling
+    if (response.data && typeof response.data === 'object' && 'success' in response.data) {
+      return response.data;
+    }
+    // If the response doesn't match our expected format, return it as is
+    return response;
   },
-  (error) => {
+  async (error) => {
     // Handle network errors
     if (!error.response) {
       return Promise.reject({
@@ -169,13 +179,33 @@ export const authAPI = {
   register: (userData) => api.post('/auth/register', userData),
   getProfile: () => api.get('/auth/profile'),
   updateProfile: (userData) => api.put('/auth/profile', userData),
+  googleAuth: (data) => {
+    // Send as JSON with proper headers
+    return api.post('/auth/google', data, {
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+  },
 };
 
 // Transaction API calls
 export const transactionAPI = {
-  getAll: (params = {}) => {
-    const queryString = new URLSearchParams(params).toString();
-    return api.get(`/transactions${queryString ? `?${queryString}` : ''}`);
+  getAll: async (params = {}) => {
+    try {
+      const queryString = new URLSearchParams(params).toString();
+      const response = await api.get(`/transactions${queryString ? `?${queryString}` : ''}`);
+      
+      // Return the nested data structure directly if successful
+      if (response && response.success) {
+        return response.data || { transactions: [], pagination: {} };
+      }
+      
+      return { transactions: [], pagination: {} };
+    } catch (error) {
+      console.error('Error fetching transactions:', error);
+      return { transactions: [], pagination: {} };
+    }
   },
   
   create: (transactionData) => api.post('/transactions', transactionData),
@@ -186,9 +216,39 @@ export const transactionAPI = {
   
   getById: (id) => api.get(`/transactions/${id}`),
   
-  getAnalytics: (params = {}) => {
-    const queryString = new URLSearchParams(params).toString();
-    return api.get(`/transactions/analytics${queryString ? `?${queryString}` : ''}`);
+  getAnalytics: async (params = {}) => {
+    try {
+      // Format parameters
+      const formattedParams = { ...params };
+      
+      // Convert boolean parameters to strings
+      ['includeRecurring', 'includeTransactions'].forEach(param => {
+        if (typeof params[param] === 'boolean') {
+          formattedParams[param] = String(params[param]);
+        }
+      });
+      
+      // Build query string
+      const queryString = new URLSearchParams(formattedParams).toString();
+      console.log('Fetching analytics with params:', formattedParams);
+      
+      // Make the API call
+      const response = await api.get(`/transactions/analytics${queryString ? `?${queryString}` : ''}`);
+      
+      console.log('Raw analytics response:', response);
+      
+      // The response should be { success: true, data: { ... } }
+      if (response && response.success) {
+        return response.data || {};
+      }
+      
+      // If the response doesn't match the expected format, log and return empty object
+      console.warn('Unexpected analytics response format:', response);
+      return {};
+    } catch (error) {
+      console.error('Error in getAnalytics:', error);
+      throw error;
+    }
   },
 };
 
@@ -270,5 +330,8 @@ export const apiUtils = {
     });
   },
 };
+
+// Export the api instance for direct imports
+export { api };
 
 export default api;
