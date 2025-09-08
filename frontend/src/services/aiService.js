@@ -1,5 +1,22 @@
 import api from './api';
 
+export const sendMessage = async (message) => {
+  try {
+    const response = await api.post('/ai/chat', { message }, { timeout: 30000 });
+    if (response && response.success) {
+      return { data: response.data };
+    }
+    throw new Error('Failed to get response from AI');
+  } catch (error) {
+    console.error('Error sending message to AI:', error);
+    // Surface a friendly message for unauthenticated users
+    if (error.status === 401) {
+      throw new Error('Please sign in to chat with your financial assistant.');
+    }
+    throw error;
+  }
+};
+
 export const getFinancialInsights = async () => {
   try {
     const response = await api.get('/ai/insights', { timeout: 65000 });

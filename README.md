@@ -39,12 +39,16 @@ A production-ready, full-stack application that revolutionizes personal finance 
 - **Category Analytics** - Deep dive into spending patterns by category
 
 ### 🧠 AI Features (GenAI)
+- **AI Chat Assistant**: Interactive chat interface powered by OpenAI that helps users understand their finances, answer questions about transactions, and provide personalized financial advice.
 - **AI Financial Insights**: Analyzes the last 30 days of transactions and generates a structured report with Spending Patterns, High Expenditure Areas, Savings Opportunities, and Budget Recommendations. Output is rendered as Markdown in the UI with headings, lists, and bold text.
 - **Personalized Financial Advice**: Produces tailored recommendations based on recent income/expense mix, savings rate, and category breakdown.
 - **Receipt OCR + LLM Analysis**: OCR extracts amount, category, description, and date from uploaded receipts to prefill transactions; optional LLM analysis highlights merchant/category/tax flags.
 - **Category Suggestion (capability)**: Smart category suggestion via LLM is available and can be integrated into the add-transaction flow.
 
-> Implementation details: Uses Google Gemini (primary: `gemini-1.5-pro`, fallback: `gemini-1.5-flash`) with retry/backoff and model fallback for quota/rate-limits. Prompts enforce Indian Rupee (₹/INR) formatting; frontend renders AI output as Markdown via `react-markdown` + `remark-gfm`.
+> Implementation details: 
+> - **AI Chat**: Powered by OpenAI's GPT models with context-aware responses based on user's financial data.
+> - **Financial Analysis**: Uses Google Gemini (primary: `gemini-1.5-pro`, fallback: `gemini-1.5-flash`) with retry/backoff and model fallback for quota/rate-limits. 
+> - **Currency Formatting**: Prompts enforce Indian Rupee (₹/INR) formatting; frontend renders AI output as Markdown via `react-markdown` + `remark-gfm`.
 
 ### 🔒 Enterprise-Grade Security
 - **JWT Authentication** - Secure token-based authentication system
@@ -56,24 +60,28 @@ A production-ready, full-stack application that revolutionizes personal finance 
 - **Responsive Design** - Seamless experience across all devices
 - **Real-time Updates** - Instant reflection of changes across devices
 - **Social Login** - Quick and easy sign-in with Google OAuth
+- **AI Chat Assistant** - Interactive chat interface for personalized support
 
 ## 🛠️ Technology Stack
 
 ### 🎯 Frontend Architecture
-- **Framework:** React 19.1 with Vite 7.0 for lightning-fast development
-- **State Management:** React Context API for efficient state management
-- **Routing:** React Router v7 for seamless navigation
-- **Styling:** Tailwind CSS v3.4 for modern, responsive design
-- **Charts:** Chart.js with react-chartjs-2 for interactive visualizations
-- **HTTP Client:** Axios with request/response interceptors
+- **Framework**: React with Vite for fast development and optimized builds
+- **State Management**: React Context API for global state management
+- **UI Components**: Material-UI (MUI) with custom theme
+- **Form Handling**: React Hook Form with Yup validation
+- **Routing**: React Router for client-side routing
+- **Charts**: Chart.js with react-chartjs-2 for data visualization
+- **Date Handling**: date-fns for date manipulation and formatting
+- **AI Chat**: Floating chat interface with real-time message streaming and context-aware responses
 - **Build Tool:** Vite for optimized production builds
 - **Type Safety:** PropTypes for component props validation
 
 ### 🔧 Backend Infrastructure
-- **Runtime:** Node.js with Express.js for robust API development
-- **Database:** MongoDB with Mongoose ODM for flexible data modeling
-- **Authentication:** JWT with refresh token rotation and OAuth 2.0 support
-- **Scheduled Jobs:** Node-cron for managing recurring payments and autopay functionality
+- **Runtime**: Node.js with Express.js for robust API development
+- **Database**: MongoDB with Mongoose ODM for flexible data modeling
+- **Authentication**: JWT with refresh token rotation and OAuth 2.0 support
+- **Scheduled Jobs**: Node-cron for managing recurring payments and autopay functionality
+- **AI Integration**: OpenAI API integration for natural language processing and financial insights
 - **File Processing:**
   - Tesseract.js v4.1 for advanced OCR capabilities
   - Sharp v0.34 for image optimization
@@ -113,6 +121,21 @@ A production-ready, full-stack application that revolutionizes personal finance 
 - Node.js (v16 or higher)
 - MongoDB (local or cloud)
 - npm or yarn
+
+## 🔧 Environment Variables
+
+### Backend
+Add the following to your `.env` file in the `backend` directory:
+
+```bash
+# OpenAI Configuration
+OPENAI_API_KEY=your_openai_api_key_here
+
+# Existing environment variables...
+MONGODB_URI=your_mongodb_uri
+JWT_SECRET=your_jwt_secret
+# ... other existing variables
+```
 
 ## 🚀 Quick Start
 

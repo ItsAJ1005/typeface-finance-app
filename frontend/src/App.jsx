@@ -11,10 +11,14 @@ import Transactions from './pages/Transactions';
 import RecurringTransactions from './pages/RecurringTransactions';
 import Receipts from './pages/Receipts';
 import Analysis from './pages/Analysis';
+import Features from './pages/Features';
+import HowItWorks from './pages/HowItWorks';
+import About from './pages/About';
 
 // Components
 import Header from './components/common/Header';
 import ProtectedRoute from './components/common/ProtectedRoute';
+import Chatbot from './components/common/Chatbot';
 
 // Utils
 import { isAuthenticated, initializeAuth } from './utils/auth';
@@ -44,9 +48,13 @@ function App() {
   return (
     <Router>
       <div className="App">
+        {isAuth && <Chatbot />}
         <Routes>
           {/* Public Routes */}
           <Route path="/" element={<LandingPage />} />
+          <Route path="/features" element={<Features />} />
+          <Route path="/how-it-works" element={<HowItWorks />} />
+          <Route path="/about" element={<About />} />
           <Route path="/login" element={<Login setIsAuth={setIsAuth} />} />
           <Route path="/register" element={<Register setIsAuth={setIsAuth} />} />
           

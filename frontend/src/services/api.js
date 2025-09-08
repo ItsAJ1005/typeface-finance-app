@@ -1,8 +1,8 @@
 import axios from 'axios';
 import { getToken, removeToken } from '../utils/auth';
 
-const YOUR_BACKEND_URL = 'https://typeface-finance-app.onrender.com/api'; // Replace with your backend URL
-// const YOUR_BACKEND_URL = 'http://localhost:5000/api'; // Replace with your backend URL
+// const YOUR_BACKEND_URL = 'https://typeface-finance-app.onrender.com/api'; // Replace with your backend URL
+const YOUR_BACKEND_URL = 'http://localhost:5000/api'; // Replace with your backend URL
 
 // Create axios instance with base URL and headers
 const api = axios.create({
@@ -52,6 +52,15 @@ api.interceptors.response.use(
 
     // Handle authentication errors
     if (error.response.status === 401) {
+      // For AI chat and other endpoints where we want to handle auth UX manually, don't redirect
+      const requestUrl = error.config?.url || '';
+      if (requestUrl.startsWith('/ai/')) {
+        return Promise.reject({
+          message: error.response.data?.message || 'Please sign in to use this feature.',
+          status: 401
+        });
+      }
+
       removeToken();
       // Don't redirect automatically for login page
       if (!window.location.pathname.includes('/login')) {
