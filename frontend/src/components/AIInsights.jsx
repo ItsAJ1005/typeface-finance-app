@@ -89,6 +89,19 @@ const AIInsights = () => {
 
   const normalizeCurrency = (text) => (typeof text === 'string' ? text.replace(/\$/g, '₹') : text);
 
+  // Improve readability by converting bold section titles to proper headings and normalizing spacing
+  const prettifyMarkdown = (text) => {
+    if (!text || typeof text !== 'string') return text;
+    let out = text;
+    // Convert lines like "**1. Spending Patterns:**" or "**Spending Patterns:**" to headings
+    out = out.replace(/^\s*\*\*\s*(\d+\.)?\s*([^:*]+):\s*\*\*\s*$/gmi, (m, num, title) => `### ${num ? num + ' ' : ''}${title.trim()}`);
+    // Ensure a blank line before headings for Markdown parsers
+    out = out.replace(/([^\n])\n(###\s)/g, '$1\n\n$2');
+    // Normalize bullet spacing (convert irregular spaced asterisks to dash list)
+    out = out.replace(/^\s*\*\s{2,}/gmi, '* ');
+    return out.trim();
+  };
+
   const parseInsights = (text) => {
     if (!text || typeof text !== 'string') return { title: 'AI Financial Insights', range: null, body: text };
     const lines = text.split(/\r?\n/);
@@ -120,9 +133,9 @@ const AIInsights = () => {
       const normalizedInsights = normalizeCurrency(insightsData.data);
       const normalizedAdvice = normalizeCurrency(adviceData.data);
 
-      const meta = parseInsights(normalizedInsights);
+      const meta = parseInsights(prettifyMarkdown(normalizedInsights));
       setInsightsMeta(meta);
-      setInsights(meta.body || normalizedInsights);
+      setInsights(meta.body || prettifyMarkdown(normalizedInsights));
       setAdvice(normalizedAdvice);
     } catch (err) {
       const errorMessage = err.response?.data?.message || err.message || 'Failed to fetch AI insights';

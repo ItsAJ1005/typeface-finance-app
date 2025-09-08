@@ -4,11 +4,15 @@ const Transaction = require('../models/Transaction');
 const AppError = require('../utils/appError');
 const catchAsync = require('../utils/catchAsync');
 const logger = require('../utils/logger');
+const { createTransaction } = require('./transactionController');
 
 // Create a new recurring transaction
 exports.createRecurringTransaction = catchAsync(async (req, res, next) => {
   const userId = req.user._id;
   logger.info(`Creating new recurring transaction for user ${userId}`);
+  
+  const session = await mongoose.startSession();
+  session.startTransaction();
   
   try {
     // Validate day of month based on frequency
@@ -30,28 +34,75 @@ exports.createRecurringTransaction = catchAsync(async (req, res, next) => {
     }
     
     // Create the recurring transaction
-    const recurringTransaction = await RecurringTransaction.create({
+    const recurringTransaction = await RecurringTransaction.create([{
       ...req.body,
       userId
-    });
+    }], { session });
     
-    logger.info(`Created recurring transaction ${recurringTransaction._id} for user ${userId}`);
+    logger.info(`Created recurring transaction ${recurringTransaction[0]._id} for user ${userId}`);
+    
+    // If this is set to start now, create the first transaction
+    if (req.body.createInitialTransaction !== false) {
+      const { type, amount, category, description, nextOccurrence } = recurringTransaction[0];
+      
+      // Create a mock request/response for the transaction controller
+      const mockReq = {
+        body: {
+          type,
+          amount,
+          category,
+          description: description || `Recurring: ${category}`,
+          date: nextOccurrence,
+          isFromRecurring: true,
+          recurringTransactionId: recurringTransaction[0]._id
+        },
+        userId: userId.toString()
+      };
+      
+      const mockRes = {
+        status: function(code) {
+          this.statusCode = code;
+          return this;
+        },
+        json: function(data) {
+          if (this.statusCode >= 400) {
+            throw new Error(data.message || 'Failed to create initial transaction');
+          }
+          return data;
+        }
+      };
+      
+      // Use the transaction controller to create the initial transaction
+      await createTransaction(mockReq, mockRes);
+      logger.info(`Created initial transaction for recurring record ${recurringTransaction[0]._id}`);
+    }
+    
+    await session.commitTransaction();
     
     res.status(201).json({
       status: 'success',
       data: {
-        recurringTransaction
+        recurringTransaction: recurringTransaction[0]
       }
     });
     
   } catch (error) {
+    await session.abortTransaction();
     logger.error('Error creating recurring transaction:', {
       error: error.message,
       stack: error.stack,
       userId,
       requestBody: req.body
     });
+    
+    // Handle duplicate key errors
+    if (error.code === 11000) {
+      return next(new AppError('A similar recurring transaction already exists', 400));
+    }
+    
     next(error);
+  } finally {
+    session.endSession();
   }
 });
 
@@ -125,24 +176,119 @@ exports.updateRecurringTransaction = catchAsync(async (req, res, next) => {
   });
 });
 
+// Toggle active status
+exports.toggleActiveStatus = catchAsync(async (req, res, next) => {
+  const { id } = req.params;
+  
+  const session = await mongoose.startSession();
+  session.startTransaction();
+  
+  try {
+    // Find the recurring transaction
+    const recurringTransaction = await RecurringTransaction.findOne({
+      _id: id,
+      userId: req.user._id
+    }).session(session);
+    
+    if (!recurringTransaction) {
+      await session.abortTransaction();
+      return next(new AppError('No recurring transaction found with that ID', 404));
+    }
+    
+    // Toggle the active status
+    recurringTransaction.isActive = !recurringTransaction.isActive;
+    
+    // If we're reactivating, calculate the next occurrence if it's in the past
+    if (recurringTransaction.isActive) {
+      const now = new Date();
+      if (!recurringTransaction.nextOccurrence || recurringTransaction.nextOccurrence < now) {
+        // Find the next valid occurrence after now
+        let nextOccurrence = new RecurringTransaction(recurringTransaction).calculateNextOccurrence(now);
+        
+        // If no valid next occurrence (e.g., past end date), don't activate
+        if (!nextOccurrence) {
+          await session.abortTransaction();
+          return next(new AppError('Cannot activate - no valid future occurrences', 400));
+        }
+        
+        recurringTransaction.nextOccurrence = nextOccurrence;
+      }
+    }
+    
+    await recurringTransaction.save({ session });
+    await session.commitTransaction();
+    
+    res.status(200).json({
+      status: 'success',
+      data: {
+        recurringTransaction
+      }
+    });
+    
+  } catch (error) {
+    await session.abortTransaction();
+    logger.error('Error toggling active status:', {
+      error: error.message,
+      stack: error.stack,
+      recurringTransactionId: id,
+      userId: req.user._id
+    });
+    next(error);
+  } finally {
+    session.endSession();
+  }
+});
+
 // Delete a recurring transaction
 exports.deleteRecurringTransaction = catchAsync(async (req, res, next) => {
   const { id } = req.params;
   const userId = req.user._id;
   
-  const recurringTransaction = await RecurringTransaction.findOneAndDelete({
-    _id: id,
-    userId
-  });
+  const session = await mongoose.startSession();
+  session.startTransaction();
   
-  if (!recurringTransaction) {
-    return next(new AppError('No recurring transaction found with that ID', 404));
+  try {
+    // Find and delete the recurring transaction
+    const recurringTransaction = await RecurringTransaction.findOneAndDelete(
+      { _id: id, userId },
+      { session }
+    );
+    
+    if (!recurringTransaction) {
+      await session.abortTransaction();
+      return next(new AppError('No recurring transaction found with that ID', 404));
+    }
+    
+    // Optionally, you might want to delete any future transactions created by this recurring transaction
+    // This is commented out as it depends on your business logic
+    // await Transaction.deleteMany(
+    //   {
+    //     recurringTransactionId: id,
+    //     date: { $gt: new Date() },
+    //     userId
+    //   },
+    //   { session }
+    // );
+    
+    await session.commitTransaction();
+    
+    res.status(204).json({
+      status: 'success',
+      data: null
+    });
+    
+  } catch (error) {
+    await session.abortTransaction();
+    logger.error('Error deleting recurring transaction:', {
+      error: error.message,
+      stack: error.stack,
+      recurringTransactionId: id,
+      userId
+    });
+    next(error);
+  } finally {
+    session.endSession();
   }
-  
-  res.status(204).json({
-    status: 'success',
-    data: null
-  });
 });
 
 // Toggle active status of a recurring transaction
@@ -150,24 +296,63 @@ exports.toggleActiveStatus = catchAsync(async (req, res, next) => {
   const { id } = req.params;
   const userId = req.user._id;
   
-  const recurringTransaction = await RecurringTransaction.findOne({
-    _id: id,
-    userId
-  });
+  const session = await mongoose.startSession();
+  session.startTransaction();
   
-  if (!recurringTransaction) {
-    return next(new AppError('No recurring transaction found with that ID', 404));
-  }
-  
-  recurringTransaction.isActive = !recurringTransaction.isActive;
-  await recurringTransaction.save();
-  
-  res.status(200).json({
-    status: 'success',
-    data: {
-      recurringTransaction
+  try {
+    // Find the recurring transaction
+    const recurringTransaction = await RecurringTransaction.findOne({
+      _id: id,
+      userId
+    }).session(session);
+    
+    if (!recurringTransaction) {
+      await session.abortTransaction();
+      return next(new AppError('No recurring transaction found with that ID', 404));
     }
-  });
+    
+    // Toggle the active status
+    recurringTransaction.isActive = !recurringTransaction.isActive;
+    
+    // If we're reactivating, calculate the next occurrence if it's in the past
+    if (recurringTransaction.isActive) {
+      const now = new Date();
+      if (!recurringTransaction.nextOccurrence || recurringTransaction.nextOccurrence < now) {
+        // Find the next valid occurrence after now
+        let nextOccurrence = new RecurringTransaction(recurringTransaction).calculateNextOccurrence(now);
+        
+        // If no valid next occurrence (e.g., past end date), don't activate
+        if (!nextOccurrence) {
+          await session.abortTransaction();
+          return next(new AppError('Cannot activate - no valid future occurrences', 400));
+        }
+        
+        recurringTransaction.nextOccurrence = nextOccurrence;
+      }
+    }
+    
+    await recurringTransaction.save({ session });
+    await session.commitTransaction();
+    
+    res.status(200).json({
+      status: 'success',
+      data: {
+        recurringTransaction
+      }
+    });
+    
+  } catch (error) {
+    await session.abortTransaction();
+    logger.error('Error toggling active status:', {
+      error: error.message,
+      stack: error.stack,
+      recurringTransactionId: id,
+      userId
+    });
+    next(error);
+  } finally {
+    session.endSession();
+  }
 });
 
 // Process all due recurring transactions
@@ -186,26 +371,45 @@ exports.processRecurringTransactions = catchAsync(async () => {
     
     logger.info(`Found ${recurringTransactions.length} recurring transactions to process`);
     
-    const transactionsToCreate = [];
+    let processedCount = 0;
     const recurringUpdates = [];
     
     for (const rt of recurringTransactions) {
       try {
-        // Create a new transaction based on the recurring transaction
+        // Create a new transaction using the transaction controller
         const { _id, userId, type, amount, category, description } = rt;
         
-        transactionsToCreate.push({
-          userId,
-          type,
-          amount,
-          category,
-          description: description || `Recurring: ${category}`,
-          date: rt.nextOccurrence,
-          isFromRecurring: true,
-          recurringTransactionId: _id
-        });
+        // Create a mock request object for the transaction controller
+        const mockReq = {
+          body: {
+            type,
+            amount,
+            category,
+            description: description || `Recurring: ${category}`,
+            date: rt.nextOccurrence
+          },
+          userId: userId.toString()
+        };
         
-        logger.info(`Prepared transaction for recurring record ${_id} (${category} - ${amount})`);
+        // Create a mock response object
+        const mockRes = {
+          status: function(code) {
+            this.statusCode = code;
+            return this;
+          },
+          json: function(data) {
+            if (this.statusCode >= 400) {
+              throw new Error(data.message || 'Failed to create transaction');
+            }
+            return data;
+          }
+        };
+        
+        // Use the transaction controller to create the transaction
+        await createTransaction(mockReq, mockRes);
+        
+        logger.info(`Created transaction for recurring record ${_id} (${category} - ${amount})`);
+        processedCount++;
         
         // Calculate the next occurrence
         const nextOccurrence = new RecurringTransaction(rt).calculateNextOccurrence();
@@ -238,14 +442,6 @@ exports.processRecurringTransactions = catchAsync(async () => {
       }
     }
     
-    // Bulk create transactions
-    if (transactionsToCreate.length > 0) {
-      logger.info(`Creating ${transactionsToCreate.length} new transactions`);
-      await Transaction.insertMany(transactionsToCreate, { session });
-    } else {
-      logger.info('No new transactions to create');
-    }
-    
     // Bulk update recurring transactions
     if (recurringUpdates.length > 0) {
       logger.info(`Updating ${recurringUpdates.length} recurring transactions`);
@@ -259,7 +455,7 @@ exports.processRecurringTransactions = catchAsync(async () => {
     
     return {
       success: true,
-      processed: transactionsToCreate.length,
+      processed: processedCount,
       timestamp: new Date()
     };
     

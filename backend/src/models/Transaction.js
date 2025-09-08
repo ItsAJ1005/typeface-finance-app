@@ -118,61 +118,163 @@ transactionSchema.index({ userId: 1, type: 1, date: -1 });
 transactionSchema.index({ userId: 1, category: 1, date: -1 });
 
 // Static method to get user analytics
-transactionSchema.statics.getAnalytics = async function(userId, startDate, endDate, includeRecurring = false) {
-  console.log('getAnalytics called with:', { userId, startDate, endDate, includeRecurring });
+transactionSchema.statics.getAnalytics = async function(userId, startDate, endDate, includeRecurring = false, includeTransactions = false) {
+  console.log('getAnalytics called with:', { 
+    userId, 
+    startDate: startDate instanceof Date ? startDate.toISOString() : startDate,
+    endDate: endDate instanceof Date ? endDate.toISOString() : endDate,
+    includeRecurring 
+  });
   
-  const matchStage = {
+  // Ensure dates are proper Date objects
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  
+  // Log the date range being used for the query
+  console.log('Analytics date range:', {
+    startDate: start.toISOString(),
+    endDate: end.toISOString(),
+    startDateLocal: start.toString(),
+    endDateLocal: end.toString()
+  });
+  
+  // Build the base query
+  const baseQuery = {
     userId: new mongoose.Types.ObjectId(userId),
-    date: {
+    date: { $gte: start, $lte: end }
+  };
+  
+  // Add recurring filter if needed
+  if (!includeRecurring) {
+    baseQuery.$or = [
+      { isFromRecurring: { $exists: false } },
+      { isFromRecurring: false }
+    ];
+  }
+  
+  // If transactions are requested, fetch them first
+  let transactions = [];
+  if (includeTransactions) {
+    transactions = await this.find({
+      userId: new mongoose.Types.ObjectId(userId),
+      date: { $gte: start, $lte: end },
+      type: 'expense',
+      amount: { $gt: 0 }
+    })
+    .select('amount date type category description')
+    .sort({ date: 1 })
+    .lean();
+    
+    console.log(`Fetched ${transactions.length} transactions for analytics`);
+    if (transactions.length > 0) {
+      console.log('Sample transaction:', {
+        date: transactions[0].date,
+        amount: transactions[0].amount,
+        category: transactions[0].category
+      });
+    }
+  }
+  
+  // Log the date range being used for the query
+  console.log('Analytics date range:', {
+    startDate: startDate.toISOString(),
+    endDate: endDate.toISOString(),
+    startDateLocal: startDate.toString(),
+    endDateLocal: endDate.toString()
+  });
+
+  // Debug: Get count of matching documents
+  const countQuery = {
+    userId: new mongoose.Types.ObjectId(userId),
+    date: { 
       $gte: new Date(startDate),
       $lte: new Date(endDate)
     }
   };
 
-  // Exclude recurring transactions unless explicitly included
   if (!includeRecurring) {
-    matchStage.isFromRecurring = { $ne: true };
+    countQuery.$or = [
+      { isFromRecurring: { $exists: false } },
+      { isFromRecurring: false }
+    ];
   }
-  
-  console.log('Match stage:', JSON.stringify(matchStage, null, 2));
-  console.log('Date range:', {
-    startDate: new Date(startDate),
-    endDate: new Date(endDate)
-  });
 
-  try {
-    // First, check if there are any matching documents
-    const count = await this.countDocuments(matchStage);
-    console.log(`Found ${count} matching transactions`);
+  const count = await this.countDocuments(countQuery);
+  console.log(`Found ${count} transactions in date range`);
+
+  // Get a sample of transactions for debugging
+  const sampleExpenses = await this.find({
+    userId: new mongoose.Types.ObjectId(userId),
+    date: { $gte: start, $lte: end },
+    type: 'expense',
+    amount: { $gt: 0 }
+  }).limit(3);
+  
+  console.log('Sample expense transactions:', JSON.stringify(sampleExpenses, null, 2));
+  
+  if (count === 0) {
+    console.log('No transactions found for the given criteria');
+    const result = {
+      totalsByType: [
+        { _id: 'income', total: 0, count: 0 },
+        { _id: 'expense', total: 0, count: 0 }
+      ],
+      categoryBreakdown: [],
+      monthlyTrend: []
+    };
     
-    if (count === 0) {
-      console.log('No transactions found for the given criteria');
-      return [{
-        totalsByType: [],
-        categoryBreakdown: [],
-        monthlyTrend: []
-      }];
+    // Add transactions to the result if requested
+    if (includeTransactions) {
+      result.transactions = [];
     }
     
-    // Log sample of matching documents
-    const sample = await this.find(matchStage).limit(2);
-    console.log('Sample transactions:', sample.map(t => ({
-      _id: t._id,
-      type: t.type,
-      amount: t.amount,
-      date: t.date,
-      isFromRecurring: t.isFromRecurring
-    })));
-  } catch (err) {
-    console.error('Error checking transaction count:', err);
+    return [result];
   }
 
+  // Convert dates to proper Date objects if they're strings
+  if (typeof startDate === 'string') startDate = new Date(startDate);
+  if (typeof endDate === 'string') endDate = new Date(endDate);
+  
+  // Ensure end date includes the entire day
+  endDate.setHours(23, 59, 59, 999);
+  
+  console.log('Querying transactions between:', startDate, 'and', endDate);
+  
   const pipeline = [
-    {
-      $match: matchStage
+    // First match the documents
+    { 
+      $match: {
+        userId: new mongoose.Types.ObjectId(userId),
+        date: { $gte: startDate, $lte: endDate },
+        $or: includeRecurring 
+          ? [
+              { isFromRecurring: { $exists: false } },
+              { isFromRecurring: true }
+            ]
+          : [
+              { isFromRecurring: { $exists: false } },
+              { isFromRecurring: false }
+            ]
+      }
     },
+    
+    // Project to ensure we have the right fields
+    {
+      $project: {
+        type: 1,
+        amount: 1,
+        category: 1,
+        date: 1,
+        year: { $year: '$date' },
+        month: { $month: '$date' },
+        day: { $dayOfMonth: '$date' }
+      }
+    },
+    
+    // Then facet to get all analytics in one query
     {
       $facet: {
+        // Totals by type (income/expense)
         totalsByType: [
           {
             $group: {
@@ -182,10 +284,10 @@ transactionSchema.statics.getAnalytics = async function(userId, startDate, endDa
             }
           }
         ],
+        
+        // Category breakdown for expenses
         categoryBreakdown: [
-          {
-            $match: { type: 'expense' }
-          },
+          { $match: { type: 'expense' } },
           {
             $group: {
               _id: '$category',
@@ -193,30 +295,121 @@ transactionSchema.statics.getAnalytics = async function(userId, startDate, endDa
               count: { $sum: 1 }
             }
           },
-          {
-            $sort: { total: -1 }
-          }
+          { $sort: { total: -1 } }
         ],
+        
+        // Monthly trend
         monthlyTrend: [
           {
             $group: {
               _id: {
-                year: { $year: '$date' },
-                month: { $month: '$date' },
+                year: '$year',
+                month: '$month',
                 type: '$type'
               },
               total: { $sum: '$amount' }
             }
           },
+          { $sort: { '_id.year': 1, '_id.month': 1 } }
+        ],
+        
+        // Heatmap data (daily expenses)
+        heatmapData: [
+          { $match: { type: 'expense' } },
           {
-            $sort: { '_id.year': 1, '_id.month': 1 }
-          }
+            $group: {
+              _id: {
+                year: '$year',
+                month: '$month',
+                day: '$day'
+              },
+              amount: { $sum: '$amount' },
+              transactions: {
+                $push: {
+                  amount: '$amount',
+                  category: '$category',
+                  description: '$description'
+                }
+              }
+            }
+          },
+          {
+            $project: {
+              _id: 0,
+              date: {
+                $dateToString: {
+                  format: '%Y-%m-%d',
+                  date: {
+                    $dateFromParts: {
+                      year: '$_id.year',
+                      month: '$_id.month',
+                      day: '$_id.day'
+                    }
+                  }
+                }
+              },
+              amount: 1,
+              transactions: 1
+            }
+          },
+          { $sort: { date: 1 } }
         ]
+      }
+    },
+    
+    // Ensure we always have income and expense entries in totalsByType
+    {
+      $addFields: {
+        totalsByType: {
+          $let: {
+            vars: {
+              income: {
+                $filter: {
+                  input: '$totalsByType',
+                  as: 'item',
+                  cond: { $eq: ['$$item._id', 'income'] }
+                }
+              },
+              expense: {
+                $filter: {
+                  input: '$totalsByType',
+                  as: 'item',
+                  cond: { $eq: ['$$item._id', 'expense'] }
+                }
+              }
+            },
+            in: {
+              $concatArrays: [
+                '$$income',
+                '$$expense',
+                {
+                  $cond: [
+                    { $eq: [{ $size: { $filter: { input: '$totalsByType', as: 'item', cond: { $eq: ['$$item._id', 'income'] } } } }, 0] },
+                    [{ _id: 'income', total: 0, count: 0 }],
+                    []
+                  ]
+                },
+                {
+                  $cond: [
+                    { $eq: [{ $size: { $filter: { input: '$totalsByType', as: 'item', cond: { $eq: ['$$item._id', 'expense'] } } } }, 0] },
+                    [{ _id: 'expense', total: 0, count: 0 }],
+                    []
+                  ]
+                }
+              ]
+            }
+          }
+        }
       }
     }
   ];
 
-  return await this.aggregate(pipeline);
+  const aggregated = await this.aggregate(pipeline);
+  // Attach transactions list if requested so frontend can compute weekly patterns/heatmap fallbacks
+  if (includeTransactions && Array.isArray(aggregated) && aggregated.length > 0) {
+    aggregated[0].transactions = transactions;
+  }
+  return aggregated;
 };
 
 // Instance method to format amount in Indian currency

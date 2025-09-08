@@ -29,15 +29,17 @@ const RecurringTransactions = () => {
       console.log('API Response:', response);
       
       // Handle error response from service
-      if (response?.error) {
+      if (response?.error || !response?.success) {
         console.error('Error in API response:', response);
-        setError(response.message || 'Error fetching transactions');
+        const errorMessage = response?.message || 'Error fetching transactions';
+        setError(errorMessage);
         setTransactions([]);
+        toast.error(errorMessage);
         return;
       }
       
-      // Check if response.data exists and is an array
-      const transactions = Array.isArray(response?.data) ? response.data : [];
+      // The service returns { success, data: [], message, count }
+      const transactions = Array.isArray(response.data) ? response.data : [];
       console.log('Processed transactions:', transactions);
       
       // Set transactions from response data
@@ -49,6 +51,7 @@ const RecurringTransactions = () => {
         toast.info('No recurring transactions found');
       } else {
         console.log(`Found ${transactions.length} transactions`);
+        toast.success(`Found ${transactions.length} recurring transactions`);
       }
     } catch (err) {
       console.error('Error in fetchRecurringTransactions:', {
