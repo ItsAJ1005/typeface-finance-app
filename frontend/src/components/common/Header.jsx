@@ -40,7 +40,7 @@ const Header = () => {
               to="/recurring-transactions" 
               className="text-gray-600 hover:text-gray-900 font-medium"
             >
-              Recurring
+              AutoPay
             </Link>
             <Link 
               to="/receipts" 
