@@ -25,6 +25,7 @@ A production-ready, full-stack application that revolutionizes personal finance 
 ### 💡 Smart Financial Management
 - **Intelligent Transaction Categorization** - Categorization of transactions using catefory mappings
 - **Custom Categories & Tags** - Create personalized categories and tags for better organization
+- **Automated Bill Payments** - Set up and manage recurring payments with autopay functionality
 
 ### 🤖 Receipt Processing
 - **Advanced OCR Technology** - Utilizes Tesseract.js for accurate text extraction from receipts
@@ -47,12 +48,14 @@ A production-ready, full-stack application that revolutionizes personal finance 
 
 ### 🔒 Enterprise-Grade Security
 - **JWT Authentication** - Secure token-based authentication system
+- **OAuth 2.0 Integration** - Secure third-party authentication via Google and other providers
 - **Rate Limiting** - Protection against brute force attacks
 - **Input Validation** - Comprehensive request validation and sanitization
 
 ### 🎯 User Experience
 - **Responsive Design** - Seamless experience across all devices
 - **Real-time Updates** - Instant reflection of changes across devices
+- **Social Login** - Quick and easy sign-in with Google OAuth
 
 ## 🛠️ Technology Stack
 
@@ -69,7 +72,8 @@ A production-ready, full-stack application that revolutionizes personal finance 
 ### 🔧 Backend Infrastructure
 - **Runtime:** Node.js with Express.js for robust API development
 - **Database:** MongoDB with Mongoose ODM for flexible data modeling
-- **Authentication:** JWT with refresh token rotation
+- **Authentication:** JWT with refresh token rotation and OAuth 2.0 support
+- **Scheduled Jobs:** Node-cron for managing recurring payments and autopay functionality
 - **File Processing:**
   - Tesseract.js v4.1 for advanced OCR capabilities
   - Sharp v0.34 for image optimization
