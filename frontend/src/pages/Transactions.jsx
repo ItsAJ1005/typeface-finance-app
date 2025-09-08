@@ -120,8 +120,15 @@ const Transactions = () => {
       };
 
       const response = await transactionAPI.getAll(params);
-      setTransactions(response.data.transactions);
-      setPagination(response.data.pagination);
+      const txList = response?.data?.transactions || response?.transactions || [];
+      const paginationInfo = response?.data?.pagination || response?.pagination || {
+        currentPage: 1,
+        totalPages: 1,
+        totalItems: 0,
+        itemsPerPage: 10
+      };
+      setTransactions(Array.isArray(txList) ? txList : []);
+      setPagination(paginationInfo);
     } catch (error) {
       setError(error.message || 'Failed to fetch transactions');
     } finally {
@@ -206,9 +213,11 @@ const Transactions = () => {
       }
     } catch (error) {
       // Handle validation errors from backend
+      console.error('Save transaction error:', error);
       if (error.errors && Array.isArray(error.errors)) {
-        const errorMessages = error.errors.map(err => `${err.field}: ${err.message}`).join(', ');
-        setError(errorMessages);
+        // Support both backend raw validator format and standardized api error shape
+        const errorMessages = error.errors.map(err => `${err.param || err.field}: ${err.msg || err.message}`).join(', ');
+        setError(errorMessages || error.message || 'Failed to save transaction');
       } else {
         setError(error.message || 'Failed to save transaction');
       }

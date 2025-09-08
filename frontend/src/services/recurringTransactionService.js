@@ -8,14 +8,15 @@ const recurringTransactionAPI = {
       const response = await api.get('/v1/recurring-transactions');
       console.log('Raw API response:', response);
       
-      // Extract transactions from the nested response structure
-      // The backend returns { data: { recurringTransactions: [...] } }
-      const transactions = response?.data?.recurringTransactions || [];
+      // The backend returns { status, results, data: { recurringTransactions: [...] } }
+      const transactions = response?.data?.data?.recurringTransactions || [];
       
-      // Ensure we always return an object with a data property that's an array
+      // Return the data in the format expected by the component
       return {
+        success: response.data?.status === 'success',
         data: Array.isArray(transactions) ? transactions : [],
-        message: 'Successfully fetched recurring transactions'
+        message: 'Successfully fetched recurring transactions',
+        count: response.data?.results || 0
       };
     } catch (error) {
       console.error('Error fetching recurring transactions:', {
@@ -25,8 +26,10 @@ const recurringTransactionAPI = {
       });
       // Return a consistent response structure even on error
       return {
+        success: false,
         data: [],
         message: error.response?.data?.message || 'Failed to fetch recurring transactions',
+        count: 0,
         error: true
       };
     }
