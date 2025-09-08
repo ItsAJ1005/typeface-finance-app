@@ -39,9 +39,9 @@ const LandingPage = () => {
             </div>
             
             <nav className="hidden md:flex items-center space-x-8">
-              <Link to="/#features" className="text-gray-600 hover:text-gray-900">Features</Link>
-              <Link to="/#how-it-works" className="text-gray-600 hover:text-gray-900">How it Works</Link>
-              <Link to="/#about" className="text-gray-600 hover:text-gray-900">About</Link>
+              <Link to="/features" className="text-gray-600 hover:text-gray-900">Features</Link>
+              <Link to="/how-it-works" className="text-gray-600 hover:text-gray-900">How it Works</Link>
+              <Link to="/about" className="text-gray-600 hover:text-gray-900">About</Link>
             </nav>
             
             <div className="flex items-center space-x-4">

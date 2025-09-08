@@ -52,6 +52,15 @@ api.interceptors.response.use(
 
     // Handle authentication errors
     if (error.response.status === 401) {
+      // For AI chat and other endpoints where we want to handle auth UX manually, don't redirect
+      const requestUrl = error.config?.url || '';
+      if (requestUrl.startsWith('/ai/')) {
+        return Promise.reject({
+          message: error.response.data?.message || 'Please sign in to use this feature.',
+          status: 401
+        });
+      }
+
       removeToken();
       // Don't redirect automatically for login page
       if (!window.location.pathname.includes('/login')) {

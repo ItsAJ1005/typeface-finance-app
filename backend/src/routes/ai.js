@@ -2,6 +2,7 @@ const express = require('express');
 const { auth } = require('../middleware/auth');
 const categoryService = require('../services/categoryService');
 const Transaction = require('../models/Transaction');
+const { handleChatMessage, clearChatHistory } = require('../controllers/aiChatController');
 
 const router = express.Router();
 
@@ -67,6 +68,12 @@ router.get('/insights', auth, async (req, res) => {
     });
   }
 });
+
+// Chat with AI assistant
+router.post('/chat', auth, handleChatMessage);
+
+// Clear chat history
+router.delete('/chat', auth, clearChatHistory);
 
 // Get personalized financial advice
 router.get('/advice', auth, async (req, res) => {

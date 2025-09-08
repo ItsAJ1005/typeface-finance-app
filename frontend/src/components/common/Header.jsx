@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { logout } from '../../utils/auth';
+import { logout, isAuthenticated } from '../../utils/auth';
 
 const Header = () => {
   const navigate = useNavigate();
@@ -24,6 +24,28 @@ const Header = () => {
           
           {/* Desktop nav */}
           <nav className="hidden md:flex items-center space-x-8">
+            {!isAuthenticated() && (
+              <>
+                <Link 
+                  to="/features" 
+                  className="text-gray-600 hover:text-gray-900 font-medium"
+                >
+                  Features
+                </Link>
+                <Link 
+                  to="/how-it-works" 
+                  className="text-gray-600 hover:text-gray-900 font-medium"
+                >
+                  How it Works
+                </Link>
+                <Link 
+                  to="/about" 
+                  className="text-gray-600 hover:text-gray-900 font-medium"
+                >
+                  About
+                </Link>
+              </>
+            )}
             <Link 
               to="/dashboard" 
               className="text-gray-600 hover:text-gray-900 font-medium"
@@ -87,6 +109,13 @@ const Header = () => {
         onClick={() => setMobileOpen(false)}
       >
         <div className="px-4 py-3 space-y-1">
+          {!isAuthenticated() && (
+            <>
+              <Link to="/features" className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:bg-gray-100">Features</Link>
+              <Link to="/how-it-works" className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:bg-gray-100">How it Works</Link>
+              <Link to="/about" className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:bg-gray-100">About</Link>
+            </>
+          )}
           <Link to="/dashboard" className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:bg-gray-100">Dashboard</Link>
           <Link to="/transactions" className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:bg-gray-100">Transactions</Link>
           <Link to="/recurring-transactions" className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:bg-gray-100">AutoPay</Link>
