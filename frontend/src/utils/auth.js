@@ -18,7 +18,11 @@ export const removeToken = () => {
 
 // Check if user is authenticated
 export const isAuthenticated = () => {
-  return !!getToken();
+  const token = getToken();
+  if (!token) return false;
+  
+  // Check if token is valid and not expired
+  return isTokenValid();
 };
 
 // Get user data
@@ -46,21 +50,46 @@ export const login = (token, user) => {
 export const logout = () => {
   removeToken();
   setUser(null);
+  // Redirect to landing page after logout
+  if (typeof window !== 'undefined') {
+    window.location.href = '/';
+  }
 };
 
 // Token validation
 export const isTokenValid = () => {
   const token = getToken();
-  if (!token) return false;
+  if (!token) {
+    console.log('No token found');
+    return false;
+  }
   
   try {
-    // Parse JWT token to check expiration
-    const payload = JSON.parse(atob(token.split('.')[1]));
-    const currentTime = Date.now() / 1000;
+    // Check if token has the correct format
+    const parts = token.split('.');
+    if (parts.length !== 3) {
+      console.log('Invalid token format: not a JWT');
+      return false;
+    }
     
-    return payload.exp > currentTime;
+    // Parse JWT token to check expiration
+    const payload = JSON.parse(atob(parts[1]));
+    
+    if (!payload.exp) {
+      console.log('Token missing expiration');
+      return false;
+    }
+    
+    const currentTime = Date.now() / 1000;
+    const isExpired = payload.exp <= currentTime;
+    
+    if (isExpired) {
+      console.log('Token expired at:', new Date(payload.exp * 1000).toISOString());
+    }
+    
+    return !isExpired;
   } catch (error) {
-    console.error('Invalid token format:', error);
+    console.error('Error validating token:', error);
     return false;
   }
 };
@@ -108,20 +137,47 @@ export const getAuthHeaders = () => {
 
 // Initialize auth state on app start
 export const initializeAuth = () => {
+  // Check if we have a valid token
   const token = getToken();
-  if (token && isTokenValid()) {
-    setupTokenExpiration();
-    return true;
-  } else {
-    logout();
+  if (!token) {
+    removeToken();
     return false;
   }
+  
+  // Check if token is valid and not expired
+  const isValid = isTokenValid();
+  
+  if (isValid) {
+    // Set up token expiration check
+    setupTokenExpiration();
+    return true;
+  }
+  
+  // If token is invalid, clear it
+  removeToken();
+  return false;
 };
 
 // Auth state management for React components
 export const useAuthState = () => {
-  const [isAuth, setIsAuth] = useState(isAuthenticated());
-  const [user, setUserState] = useState(getUser());
+  const [isAuth, setIsAuth] = useState(false);
+  const [user, setUserState] = useState(null);
+  const [initialized, setInitialized] = useState(false);
+  
+  // Initialize auth state on mount
+  useEffect(() => {
+    const init = () => {
+      const authStatus = isAuthenticated();
+      setIsAuth(authStatus);
+      if (authStatus) {
+        setUserState(getUser());
+        setupTokenExpiration();
+      }
+      setInitialized(true);
+    };
+    
+    init();
+  }, []);
   
   const updateAuth = (token, userData) => {
     if (token && userData) {

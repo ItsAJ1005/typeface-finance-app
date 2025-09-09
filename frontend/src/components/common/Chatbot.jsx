@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { sendMessage } from '../../services/aiService';
+import { isAuthenticated } from '../../utils/auth';
 import { 
   Box, 
   IconButton, 
@@ -131,23 +132,34 @@ const ChatInput = styled(Box)({
 });
 
 const ChatButton = styled(IconButton)({
-  position: 'fixed',
-  bottom: '20px',
-  right: '20px',
-  width: '56px',
-  height: '56px',
+  position: 'relative',
+  bottom: 0,
+  right: 0,
   backgroundColor: '#ef4444',
   color: 'white',
-  boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
-  transition: 'all 0.2s ease-in-out',
   '&:hover': {
     backgroundColor: '#dc2626',
     transform: 'translateY(-2px)',
-    boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
+    boxShadow: '0 6px 16px rgba(0,0,0,0.2)',
   },
+  width: '60px',
+  height: '60px',
+  boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+  zIndex: 1000,
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  borderRadius: '50%',
+  transition: 'all 0.3s ease',
   '&:active': {
     transform: 'translateY(0)',
   },
+  '@keyframes pulse': {
+    '0%': { transform: 'scale(1)' },
+    '50%': { transform: 'scale(1.05)' },
+    '100%': { transform: 'scale(1)' },
+  },
+  animation: 'pulse 2s infinite',
 });
 
 const Chatbot = () => {
@@ -230,6 +242,9 @@ const Chatbot = () => {
     setIsOpen(!isOpen);
   };
 
+  const navigate = useNavigate();
+  const isUserAuthenticated = isAuthenticated();
+
   // Hide the chatbot entirely on login/register pages
   if (location.pathname.startsWith('/login') || location.pathname.startsWith('/register')) {
     return null;
@@ -237,11 +252,49 @@ const Chatbot = () => {
 
   if (!isOpen) {
     return (
-      <Tooltip title="Chat with financial assistant">
-        <ChatButton onClick={toggleChat}>
-          <ChatIcon fontSize="large" />
-        </ChatButton>
-      </Tooltip>
+      <Box sx={{ position: 'fixed', bottom: '20px', right: '20px', zIndex: 1000 }}>
+        <Tooltip 
+          title={isUserAuthenticated ? "Chat with financial assistant" : "Sign in to chat with our financial assistant"}
+          placement="left"
+          arrow
+          open={!isUserAuthenticated}
+          componentsProps={{
+            tooltip: {
+              sx: {
+                bgcolor: 'white',
+                color: '#1f2937',
+                border: '1px solid #e5e7eb',
+                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                '& .MuiTooltip-arrow': {
+                  color: 'white',
+                  '&:before': {
+                    border: '1px solid #e5e7eb',
+                  }
+                }
+              }
+            }
+          }}
+        >
+          <ChatButton 
+            onClick={() => isUserAuthenticated ? toggleChat() : navigate('/login')}
+            sx={{
+              backgroundColor: isUserAuthenticated ? '#ef4444' : '#ef4444',
+              color: 'white',
+              '&:hover': {
+                backgroundColor: isUserAuthenticated ? '#dc2626' : '#dc2626',
+                transform: 'translateY(-2px)',
+              },
+              animation: !isUserAuthenticated ? 'pulse 2s infinite' : 'none'
+            }}
+          >
+            {isUserAuthenticated ? (
+              <ChatIcon fontSize="large" />
+            ) : (
+              <ChatIcon fontSize="large" />
+            )}
+          </ChatButton>
+        </Tooltip>
+      </Box>
     );
   }
 
