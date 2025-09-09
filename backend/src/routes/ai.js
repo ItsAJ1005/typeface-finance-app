@@ -70,10 +70,50 @@ router.get('/insights', auth, async (req, res) => {
 });
 
 // Chat with AI assistant
-router.post('/chat', auth, handleChatMessage);
+router.post('/chat', auth, async (req, res) => {
+  try {
+    const { message } = req.body;
+    if (!message || typeof message !== 'string' || message.trim() === '') {
+      return res.status(400).json({
+        success: false,
+        message: 'Message is required and must be a non-empty string'
+      });
+    }
+
+    // Process the chat message with proper user isolation
+    await handleChatMessage(req, res);
+  } catch (error) {
+    console.error('Chat error:', error);
+    
+    // Handle specific error cases
+    if (error.message.includes('Failed to process chat message')) {
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to process your message. Please try again.'
+      });
+    }
+    
+    // General error response
+    res.status(500).json({
+      success: false,
+      message: error.message || 'An unexpected error occurred'
+    });
+  }
+});
 
 // Clear chat history
-router.delete('/chat', auth, clearChatHistory);
+router.delete('/chat', auth, async (req, res) => {
+  try {
+    await clearChatHistory(req, res);
+  } catch (error) {
+    console.error('Error in clear chat history route:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to clear chat history',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
 
 // Get personalized financial advice
 router.get('/advice', auth, async (req, res) => {
