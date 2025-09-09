@@ -2,14 +2,12 @@ const OpenAI = require('openai');
 const analyticsService = require('../services/analyticsService');
 const Transaction = require('../models/Transaction');
 const RecurringTransaction = require('../models/RecurringTransaction');
+const ChatHistory = require('../models/ChatHistory');
 
-// Initialize OpenAI with API key
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+// In-memory cache for active chat histories
+const activeChatHistories = new Map();
 
-// In-memory chat history (replace with DB in production)
-const chatHistories = new Map();
-
-// System message to define assistant behavior
+// System message for the AI assistant
 const SYSTEM_MESSAGE = {
   role: 'system',
   content: `You are a helpful financial assistant for the Typeface Finance app.
@@ -18,6 +16,12 @@ Keep answers concise, friendly, and professional. Use Indian rupees (₹) for al
 
 When the user asks:
 - About spend/expenses: provide the total spending for the period, optionally top 3 categories.
+- About income: show total income and any notable sources.
+- About savings: calculate and show the savings rate.
+- For advice: provide specific, actionable suggestions based on spending patterns.
+- About transactions: list relevant transactions with dates, amounts, and categories.
+- About budgets: compare actual spending vs budgeted amounts.
+- For analysis: identify trends, anomalies, or opportunities for improvement.
 - About income/net balance/savings: compute from context: net = income − expenses.
 - About "net worth": clarify that only transactional net savings are available unless assets/liabilities are provided; offer to compute true net worth if they share those.
 - About saving money: give 3–5 actionable, tailored tips based on their top categories and spending rate.
@@ -35,14 +39,136 @@ Format transaction responses clearly, for example:
 "Here are your top 5 transactions for [time period]:\n1. ₹5,000 - Groceries at Supermarket (Jan 15)\n2. ₹3,500 - Electricity Bill (Jan 10)\n..."`
 };
 
+// Initialize OpenAI with API key
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+// Helper function to get or create chat history
+async function getOrCreateChatHistory(userId, sessionId = 'default') {
+  try {
+    const cacheKey = `${userId}-${sessionId}`;
+    
+    // Check cache first
+    if (activeChatHistories.has(cacheKey)) {
+      const cached = activeChatHistories.get(cacheKey);
+      if (cached) return cached;
+    }
+    
+    // Try to find existing chat history
+    let chatHistory = await ChatHistory.findOne({ userId, sessionId });
+    
+    // If not found, create a new one
+    if (!chatHistory) {
+      chatHistory = new ChatHistory({
+        userId,
+        sessionId,
+        messages: [SYSTEM_MESSAGE],
+        lastActive: new Date()
+      });
+      await chatHistory.save();
+    }
+    
+    // Update cache
+    activeChatHistories.set(cacheKey, chatHistory);
+    return chatHistory;
+  } catch (error) {
+    console.error('Error in getOrCreateChatHistory:', error);
+    throw new Error('Failed to get or create chat history');
+  }
+}
+
+// Clean up old chat histories periodically
+setInterval(async () => {
+  try {
+    // Check if the cleanupOldSessions method exists on the model
+    if (typeof ChatHistory.cleanupOldSessions === 'function') {
+      const result = await ChatHistory.cleanupOldSessions(30); // Keep 30 days of history
+      if (result?.deletedCount > 0) {
+        console.log(`Cleaned up ${result.deletedCount} old chat histories`);
+        
+        // Also clear cache for deleted histories
+        for (const [key, value] of activeChatHistories.entries()) {
+          const lastActive = new Date(value.lastActive);
+          const cutoffDate = new Date();
+          cutoffDate.setDate(cutoffDate.getDate() - 30);
+          
+          if (lastActive < cutoffDate) {
+            activeChatHistories.delete(key);
+          }
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Error cleaning up old chat histories:', error);
+  }
+}, 24 * 60 * 60 * 1000); // Run once per day
+
 // --------------------------- Utility Functions ---------------------------
 
-// Get or initialize chat history for a user
-const getChatHistory = (userId) => {
-  if (!chatHistories.has(userId)) {
-    chatHistories.set(userId, [SYSTEM_MESSAGE]);
+// Process chat message with user isolation
+const processChatMessage = async (userId, message) => {
+  try {
+    // Get or create chat history for this user
+    const chatHistory = await getOrCreateChatHistory(userId);
+    
+    // Add user message to history
+    if (typeof chatHistory.addMessage === 'function') {
+      await chatHistory.addMessage('user', message);
+    } else {
+      // Fallback if addMessage method doesn't exist
+      chatHistory.messages.push({ role: 'user', content: message, timestamp: new Date() });
+      chatHistory.lastActive = new Date();
+      await chatHistory.save();
+    }
+    
+    // Get financial context for AI response
+    const { start, end } = await inferDateRange(userId, message.toLowerCase());
+    const context = await getFinancialContext(userId, start, end);
+    
+    // Prepare messages for OpenAI
+    const messages = [
+      { role: 'system', content: SYSTEM_MESSAGE.content },
+      ...chatHistory.messages.slice(-10).map(m => ({
+        role: m.role,
+        content: m.content
+      })),
+      { 
+        role: 'system',
+        content: `Current financial context: ${JSON.stringify(context, null, 2)}`
+      }
+    ];
+    
+    // Generate AI response
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-3.5-turbo',
+      messages,
+      temperature: 0.7,
+      max_tokens: 500
+    });
+    
+    const aiResponse = completion.choices[0].message.content;
+    
+    // Save AI response to history
+    if (typeof chatHistory.addMessage === 'function') {
+      await chatHistory.addMessage('assistant', aiResponse);
+    } else {
+      // Fallback if addMessage method doesn't exist
+      chatHistory.messages.push({ role: 'assistant', content: aiResponse, timestamp: new Date() });
+      chatHistory.lastActive = new Date();
+      await chatHistory.save();
+    }
+    
+    return {
+      success: true,
+      data: aiResponse,
+      context: {
+        dateRange: { start, end },
+        ...context
+      }
+    };
+  } catch (error) {
+    console.error('Error processing chat message:', error);
+    throw new Error('Failed to process chat message');
   }
-  return chatHistories.get(userId);
 };
 
 // Infer date range from message
@@ -50,6 +176,7 @@ const inferDateRange = async (userId, messageLower) => {
   const now = new Date();
   let start = new Date(now);
   start.setDate(now.getDate() - 30);
+  let end = new Date(now);
   let label = 'Last 30 days';
 
   if (/(all time|all-time|overall|lifetime|complete|entire|since start)/i.test(messageLower)) {
@@ -66,14 +193,14 @@ const inferDateRange = async (userId, messageLower) => {
     const year = month < 0 ? now.getFullYear() - 1 : now.getFullYear();
     const m = (month + 12) % 12;
     start = new Date(year, m, 1);
-    const end = new Date(year, m + 1, 0, 23, 59, 59, 999);
+    end = new Date(year, m + 1, 0, 23, 59, 59, 999);
     return { start, end, label: 'Last month' };
   } else if (/(ytd|year to date|year-to-date|this year)/i.test(messageLower)) {
     start = new Date(now.getFullYear(), 0, 1);
     label = 'Year to date';
   }
 
-  return { start, end: now, label };
+  return { start, end, label };
 };
 
 // Get upcoming recurring transactions
@@ -357,8 +484,18 @@ const handleChatMessage = async (req, res) => {
       return res.status(400).json({ success: false, error: 'Message is required and cannot be empty' });
     }
 
-    const chatHistory = getChatHistory(userId);
-    chatHistory.push({ role: 'user', content: message });
+    // Get or create chat history for this user
+    const chatHistory = await getOrCreateChatHistory(userId);
+    
+    // Add user message to history
+    if (typeof chatHistory.addMessage === 'function') {
+      await chatHistory.addMessage('user', message);
+    } else {
+      // Fallback if addMessage method doesn't exist
+      chatHistory.messages.push({ role: 'user', content: message, timestamp: new Date() });
+      chatHistory.lastActive = new Date();
+      await chatHistory.save();
+    }
 
     const lower = message.toLowerCase();
     const rangeWords = /(all time|all-time|overall|lifetime|complete|entire|since start|this month|current month|last month|previous month|ytd|year to date|year-to-date|this year)/i;
@@ -383,7 +520,15 @@ const handleChatMessage = async (req, res) => {
       }
 
       if (contextData) {
-        chatHistory[0].content += formatFinancialContext(message, contextData, label);
+        // Add financial context to the chat history
+        const contextMessage = formatFinancialContext(message, contextData, label);
+        if (typeof chatHistory.addMessage === 'function') {
+          await chatHistory.addMessage('system', contextMessage);
+        } else {
+          chatHistory.messages.push({ role: 'system', content: contextMessage, timestamp: new Date() });
+          chatHistory.lastActive = new Date();
+          await chatHistory.save();
+        }
       }
     }
 
@@ -399,7 +544,7 @@ const handleChatMessage = async (req, res) => {
 
     // If the user just said "yes" after assistant offered details, infer the prior topic
     if (isAffirmation && !isSpendQuery && !isNetQuery && !isSavingsAdvice && !isAllTransactions && !isRangeOnly) {
-      const lastAssistant = [...chatHistory].reverse().find(m => m.role === 'assistant');
+      const lastAssistant = [...chatHistory.messages].reverse().find(m => m.role === 'assistant');
       const lastAssistantLower = (lastAssistant?.content || '').toLowerCase();
       let guidance = 'Continue the previous topic using the provided financial context. Use ₹ and concise sentences.';
       if (/top\s*(spending\s*)?categories|would you like to know the top/i.test(lastAssistantLower)) {
@@ -409,24 +554,46 @@ const handleChatMessage = async (req, res) => {
       } else {
         guidance += ' The user confirmed: default to spending details with top categories.';
       }
-      chatHistory.push({ role: 'system', content: guidance });
+      
+      if (typeof chatHistory.addMessage === 'function') {
+        await chatHistory.addMessage('system', guidance);
+      } else {
+        chatHistory.messages.push({ role: 'system', content: guidance, timestamp: new Date() });
+        chatHistory.lastActive = new Date();
+        await chatHistory.save();
+      }
     }
 
     // If the user said "no", acknowledge and offer help without resetting context
     if (isNegative && !isSpendQuery && !isNetQuery && !isSavingsAdvice && !isAllTransactions && !isRangeOnly) {
       const closure = 'Acknowledge politely and end the thread without asking open questions. Example: "Got it. If you need anything else, just ask." Keep it to one short sentence.';
-      chatHistory.push({ role: 'system', content: closure });
+      
+      if (typeof chatHistory.addMessage === 'function') {
+        await chatHistory.addMessage('system', closure);
+      } else {
+        chatHistory.messages.push({ role: 'system', content: closure, timestamp: new Date() });
+        chatHistory.lastActive = new Date();
+        await chatHistory.save();
+      }
     }
+    
     if (isSpendQuery || isNetQuery || isSavingsAdvice || isAllTransactions) {
       let guidance = 'Answer using the provided financial context. Use ₹ and concise sentences. Format answers with clear line breaks and lists.';
       if (isSpendQuery) guidance += ' For spend queries: first line: "Total expenses: ₹[amount]". If adding categories, start a new line with "Top categories:" then use a numbered list, one item per line: "1. [Category]: ₹[amount] ([percent]%)".';
       if (isNetQuery) guidance += ' For net balance queries: compute net = income − expenses for the period and present on its own line. If asked for "net worth", clarify limitation and offer method to compute if assets/liabilities are provided.';
       if (isSavingsAdvice) guidance += ' For saving advice: Start with one concise summary line. Then a list titled "Tips:" followed by 3–5 numbered tips, each on its own line, short and actionable, referencing the user’s top categories. Include a suggested monthly savings target like "Target: ₹X/month" on a separate line.';
       if (isAllTransactions) guidance += ' For all-transactions request: list up to 50 transactions for the requested period. Start with a header line like "Transactions ([range]):" then each on a new line: "1. [DD MMM] - [Description]: -₹[amount] ([Category])". Always one transaction per line.';
-      chatHistory.push({ role: 'system', content: guidance });
+      
+      if (typeof chatHistory.addMessage === 'function') {
+        await chatHistory.addMessage('system', guidance);
+      } else {
+        chatHistory.messages.push({ role: 'system', content: guidance, timestamp: new Date() });
+        chatHistory.lastActive = new Date();
+        await chatHistory.save();
+      }
     } else if (isRangeOnly) {
       // Reuse the last user topic if only a range was provided
-      const lastUser = [...chatHistory].reverse().find(m => m.role === 'user' && m.content !== message);
+      const lastUser = [...chatHistory.messages].reverse().find(m => m.role === 'user' && m.content !== message);
       const lastLower = (lastUser?.content || '').toLowerCase();
       const lastSpend = /(spend|spent|expense|expenses)/i.test(lastLower);
       const lastNet = /(net|balance|savings)/i.test(lastLower);
@@ -434,7 +601,14 @@ const handleChatMessage = async (req, res) => {
       if (lastSpend) guidance += ' Previous topic was spending: report total expenses for the requested range.';
       else if (lastNet) guidance += ' Previous topic was net balance: compute net = income − expenses for the requested range.';
       else guidance += ' Default to net balance: compute net = income − expenses for the requested range.';
-      chatHistory.push({ role: 'system', content: guidance });
+      
+      if (typeof chatHistory.addMessage === 'function') {
+        await chatHistory.addMessage('system', guidance);
+      } else {
+        chatHistory.messages.push({ role: 'system', content: guidance, timestamp: new Date() });
+        chatHistory.lastActive = new Date();
+        await chatHistory.save();
+      }
     }
 
     // Handle bill/autopay queries directly
@@ -446,27 +620,63 @@ const handleChatMessage = async (req, res) => {
         ).join('\n');
         
         const response = `You have the following upcoming bills and payments:\n${billList}`;
-        chatHistory.push({ role: 'assistant', content: response });
+        
+        if (typeof chatHistory.addMessage === 'function') {
+          await chatHistory.addMessage('assistant', response);
+        } else {
+          chatHistory.messages.push({ role: 'assistant', content: response, timestamp: new Date() });
+          chatHistory.lastActive = new Date();
+          await chatHistory.save();
+        }
+        
         return res.json({ success: true, data: response });
       } else {
         const response = "You don't have any upcoming bills or scheduled payments in the next 30 days.";
-        chatHistory.push({ role: 'assistant', content: response });
+        
+        if (typeof chatHistory.addMessage === 'function') {
+          await chatHistory.addMessage('assistant', response);
+        } else {
+          chatHistory.messages.push({ role: 'assistant', content: response, timestamp: new Date() });
+          chatHistory.lastActive = new Date();
+          await chatHistory.save();
+        }
+        
         return res.json({ success: true, data: response });
       }
     }
 
-    // Limit messages to avoid hitting token limits
-    const recentMessages = chatHistory.slice(-10);
-    const aiResponse = await generateResponse(recentMessages);
+    // Get recent messages for context (last 10 messages)
+    const recentMessages = chatHistory.messages.slice(-10).map(m => ({
+      role: m.role,
+      content: m.content
+    }));
+    
+    // Generate AI response with proper context
+    const messages = [
+      { role: 'system', content: SYSTEM_MESSAGE.content },
+      ...recentMessages
+    ];
+    
+    const aiResponse = await generateResponse(messages);
 
-    chatHistory.push({ role: 'assistant', content: aiResponse });
-
-    // Keep chat history trimmed
-    if (chatHistory.length > 21) {
-      chatHistories.set(userId, [SYSTEM_MESSAGE, ...chatHistory.slice(-20)]);
+    // Add AI response to chat history
+    if (typeof chatHistory.addMessage === 'function') {
+      await chatHistory.addMessage('assistant', aiResponse);
+    } else {
+      chatHistory.messages.push({ role: 'assistant', content: aiResponse, timestamp: new Date() });
+      chatHistory.lastActive = new Date();
+      await chatHistory.save();
     }
 
-    res.json({ success: true, data: aiResponse });
+    // Return the response
+    res.json({ 
+      success: true, 
+      data: aiResponse,
+      context: {
+        messageCount: chatHistory.messages.length,
+        lastActive: chatHistory.lastActive
+      }
+    });
   } catch (error) {
     console.error('Error in handleChatMessage:', error);
     res.status(500).json({
@@ -478,9 +688,20 @@ const handleChatMessage = async (req, res) => {
 };
 
 // Clear chat history
-const clearChatHistory = (req, res) => {
+const clearChatHistory = async (req, res) => {
   try {
-    chatHistories.delete(req.userId);
+    const userId = req.userId;
+    
+    // Clear from database
+    await ChatHistory.deleteMany({ userId });
+    
+    // Clear from cache
+    for (const [key] of activeChatHistories.entries()) {
+      if (key.startsWith(`${userId}-`)) {
+        activeChatHistories.delete(key);
+      }
+    }
+    
     res.json({ success: true, message: 'Chat history cleared' });
   } catch (error) {
     console.error('Error clearing chat history:', error);
