@@ -138,18 +138,37 @@ const Receipts = () => {
       
       // Determine message type based on response
       const isProcessingWarning = response._isProcessingWarning || response.success === false;
-      const hasProcessingError = response.processingError;
+      const hasProcessingError = response.data?.processingError;
+      const hasWarnings = response.data?.processingWarnings?.length > 0;
       
-      let messageClass, iconClass, title, message;
+      let messageClass, iconClass, title, message, autoClose = true;
       
-      if (isProcessingWarning && hasProcessingError) {
+      if (hasProcessingError) {
         // Processing failed but upload succeeded
         messageClass = 'bg-yellow-50 border-yellow-200 text-yellow-700';
         iconClass = 'text-yellow-400';
         title = 'Receipt uploaded with processing issues';
-        message = `Your receipt has been uploaded but OCR processing failed: ${hasProcessingError}. You can review and process it manually.`;
+        message = `Your receipt has been uploaded but there were issues processing it: ${hasProcessingError}. You can review and process it manually.`;
+        autoClose = false; // Keep this message open longer
+      } else if (hasWarnings) {
+        // Processing had warnings but was partially successful
+        messageClass = 'bg-blue-50 border-blue-200 text-blue-700';
+        iconClass = 'text-blue-400';
+        title = 'Receipt uploaded with partial processing';
+        message = (
+          <div>
+            <p className="font-medium">We found your receipt, but some information couldn't be extracted automatically.</p>
+            <ul className="list-disc pl-5 mt-2 space-y-1">
+              {response.data.processingWarnings.map((warning, i) => (
+                <li key={i}>{warning}</li>
+              ))}
+            </ul>
+            <p className="mt-2">Please review and complete the information manually.</p>
+          </div>
+        );
+        autoClose = false; // Keep this message open longer
       } else if (isProcessingWarning) {
-        // Processing warning but no specific error
+        // Generic processing warning
         messageClass = 'bg-yellow-50 border-yellow-200 text-yellow-700';
         iconClass = 'text-yellow-400';
         title = 'Receipt uploaded with processing issues';
@@ -159,7 +178,7 @@ const Receipts = () => {
         messageClass = 'bg-green-50 border-green-200 text-green-700';
         iconClass = 'text-green-400';
         title = 'Receipt uploaded successfully!';
-        message = 'Your receipt has been uploaded and is now being processed with OCR. You can check its status in the list below.';
+        message = 'Your receipt has been uploaded and processed successfully.';
       }
       
       // Show success message using React state
@@ -171,11 +190,13 @@ const Receipts = () => {
       });
       
       // Clear the success message after an appropriate duration
-      // Use longer duration (10s) for processing failures, standard duration (6s) for success
-      const messageTimeout = (isProcessingWarning && hasProcessingError) ? 10000 : 6000;
-      setTimeout(() => {
+      const messageTimeout = autoClose ? 6000 : 15000; // 6s for success, 15s for warnings/errors
+      const timeoutId = setTimeout(() => {
         setSuccessMessage(null);
       }, messageTimeout);
+      
+      // Return the timeout ID so it can be cleared if needed
+      return () => clearTimeout(timeoutId);
       
     } catch (error) {
       console.log('Receipt upload error caught:', error);
@@ -453,7 +474,7 @@ const Receipts = () => {
                   Choose File
                 </label>
                                  <p className="text-xs text-gray-500 mt-2">
-                   Supported formats: JPEG, PNG, PDF (Max 2 receipts, oldest deleted automatically)
+                   Supported formats: JPEG, PNG, PDF
                  </p>
               </div>
             ) : (

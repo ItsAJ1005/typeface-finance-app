@@ -362,7 +362,7 @@ const handleChatMessage = async (req, res) => {
 
     const lower = message.toLowerCase();
     const rangeWords = /(all time|all-time|overall|lifetime|complete|entire|since start|this month|current month|last month|previous month|ytd|year to date|year-to-date|this year)/i;
-    const topicWords = /(spend|spent|expense|expenses|income|transaction|transactions|budget|savings|save money|balance|net\s*balance|net\s*worth|networth|net\b|how much|where did my money|my financial|analyze my|advice|tips|auto\s*pay|autopay|auto-pay|subscriptions?)/i;
+    const topicWords = /(spend|spent|expense|expenses|income|transaction|transactions|budget|savings|save money|balance|net\s*balance|net\s*worth|networth|net\b|how much|where did my money|my financial|analyze my|advice|tips|auto\s*pay|autopay|auto-pay|subscriptions?|bill|bills|payment|payments|upcoming|due|schedule|recurring)/i;
     const hasRange = rangeWords.test(lower);
     const hasTopic = topicWords.test(lower);
     const needsFinancialContext = hasTopic || hasRange;
@@ -393,6 +393,7 @@ const handleChatMessage = async (req, res) => {
     const isSavingsAdvice = /(save money|save more|reduce expenses|advice|tips|how.*save)/i.test(lower);
     const isAffirmation = /^(yes|yeah|yep|sure|ok|okay|please|go ahead|do it|show me)\b/i.test(lower.trim());
     const isNegative = /^(no|nope|nah|not now|later|stop|cancel)\b/i.test(lower.trim());
+    const isBillQuery = /(upcoming\s*(bills?|payments?)|bills?\s*due|payment\s*due|when is my next|when's my next|autopay|auto\s*pay|auto-pay|subscriptions?|recurring\s*(payments?|bills?|expenses?))/i.test(lower);
     const isRangeOnly = hasRange && !hasTopic;
     const isAllTransactions = /(all\s*transactions|list\s*all|show\s*all\s*transactions|full\s*list|everything)/i.test(lower);
 
@@ -434,6 +435,24 @@ const handleChatMessage = async (req, res) => {
       else if (lastNet) guidance += ' Previous topic was net balance: compute net = income − expenses for the requested range.';
       else guidance += ' Default to net balance: compute net = income − expenses for the requested range.';
       chatHistory.push({ role: 'system', content: guidance });
+    }
+
+    // Handle bill/autopay queries directly
+    if (isBillQuery) {
+      const upcomingBills = await getUpcomingRecurringTransactions(userId, 30);
+      if (upcomingBills.length > 0) {
+        const billList = upcomingBills.map((bill, index) => 
+          `${index + 1}. ${bill.description}: ₹${bill.amount.toFixed(2)} (${bill.frequency || 'recurring'}, next due: ${new Date(bill.dueDate).toLocaleDateString()})`
+        ).join('\n');
+        
+        const response = `You have the following upcoming bills and payments:\n${billList}`;
+        chatHistory.push({ role: 'assistant', content: response });
+        return res.json({ success: true, data: response });
+      } else {
+        const response = "You don't have any upcoming bills or scheduled payments in the next 30 days.";
+        chatHistory.push({ role: 'assistant', content: response });
+        return res.json({ success: true, data: response });
+      }
     }
 
     // Limit messages to avoid hitting token limits

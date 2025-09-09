@@ -97,47 +97,68 @@ const uploadReceipt = async (req, res) => {
     const fileUrl = `/uploads/receipts/${req.file.filename}`;
 
     // Process the receipt using OCR
-    const ocrResult = await ocrService.processReceipt(filePath);
-
-    if (!ocrResult.success) {
-      // Clean up the uploaded file
-      await ocrService.cleanupFile(filePath);
-
-      return res.status(400).json({
-        success: false,
-        message: ocrResult.error || "Failed to process receipt",
-        details: "Could not extract transaction data from the uploaded receipt",
-      });
-    }
-
-    // Generate receipt ID
-    const receiptId = uuidv4();
-
-    // Prepare transaction data
-    const transactionData = {
-      receiptId,
-      receiptUrl: fileUrl,
-      ...ocrResult.data,
-      type: "expense", // Receipts are typically expenses
-      isFromReceipt: true,
-    };
-
-    res.json({
-      success: true,
-      message: "Receipt processed successfully",
-      data: {
+    try {
+      const ocrResult = await ocrService.processReceipt(filePath);
+      
+      // Check if there were any extraction warnings
+      const hasWarnings = ocrResult.extractionInfo?.extractionWarnings?.length > 0;
+      const receiptId = uuidv4();
+      
+      // Prepare the base response data
+      const responseData = {
         receiptId,
         receiptUrl: fileUrl,
-        extractedData: transactionData,
-        confidence: ocrResult.data.confidence,
-        suggestions: {
-          amount: ocrResult.data.amount,
-          category: ocrResult.data.category,
-          description: ocrResult.data.description,
-          date: ocrResult.data.date,
+        extractedData: {
+          ...ocrResult,
+          receiptUrl: fileUrl,
+          type: "expense",
+          isFromReceipt: true,
         },
-      },
-    });
+        confidence: ocrResult.confidence,
+        suggestions: {
+          amount: ocrResult.amount || 0,
+          category: ocrResult.category,
+          description: ocrResult.description,
+          date: ocrResult.date || new Date(),
+        },
+      };
+      
+      // If we have warnings, add them to the response
+      if (hasWarnings) {
+        console.log('Receipt processed with warnings:', ocrResult.extractionInfo.extractionWarnings);
+        responseData.processingWarnings = ocrResult.extractionInfo.extractionWarnings;
+        
+        return res.status(200).json({
+          success: true,
+          message: "Receipt uploaded with processing warnings",
+          data: responseData,
+          _isProcessingWarning: true, // Flag to indicate this is a warning, not an error
+        });
+      }
+      
+      // If we got here, processing was fully successful
+      return res.json({
+        success: true,
+        message: "Receipt processed successfully",
+        data: responseData,
+      });
+    } catch (error) {
+      console.error('Error processing receipt:', error);
+      
+      // Clean up the uploaded file
+      await ocrService.cleanupFile(filePath);
+      
+      // Return a more specific error message
+      return res.status(422).json({
+        success: false,
+        message: 'Receipt uploaded but processing failed',
+        data: {
+          receiptUrl: fileUrl,
+          receiptId: uuidv4(),
+        },
+        processingError: error.message || 'Could not process receipt',
+      });
+    }
   } catch (error) {
     console.error("Receipt upload error:", error);
 
