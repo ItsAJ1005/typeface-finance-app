@@ -48,15 +48,21 @@ function App() {
   return (
     <Router>
       <div className="App">
-        {isAuth && <Chatbot />}
+        <Chatbot />
         <Routes>
           {/* Public Routes */}
-          <Route path="/" element={<LandingPage />} />
+          <Route path="/" element={
+            isAuth ? <Navigate to="/dashboard" replace /> : <LandingPage />
+          } />
           <Route path="/features" element={<Features />} />
           <Route path="/how-it-works" element={<HowItWorks />} />
           <Route path="/about" element={<About />} />
-          <Route path="/login" element={<Login setIsAuth={setIsAuth} />} />
-          <Route path="/register" element={<Register setIsAuth={setIsAuth} />} />
+          <Route path="/login" element={
+            isAuth ? <Navigate to="/dashboard" replace /> : <Login setIsAuth={setIsAuth} />
+          } />
+          <Route path="/register" element={
+            isAuth ? <Navigate to="/dashboard" replace /> : <Register setIsAuth={setIsAuth} />
+          } />
           
           {/* Protected Routes */}
           <Route path="/dashboard" element={
