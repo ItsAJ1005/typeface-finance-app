@@ -37,7 +37,7 @@ A production-ready, full-stack application that revolutionizes personal finance 
   - Purchase dates and times
   - Line items and quantities
   - Tax and tip amounts
-- **PDF Statement Import** - Bulk import transactions from bank statements and credit card PDFs
+- **PDF Statement Import** - Import transaction history from PDF statements
 - **Intelligent Image Processing**:
   - Automatic quality assessment and enhancement
   - Adaptive preprocessing for low-quality images
