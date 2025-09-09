@@ -3,6 +3,10 @@ const fs = require('fs').promises;
 const sharp = require('sharp'); // For image preprocessing
 const path = require('path');
 const pdfParse = require('pdf-parse');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
+
+// Initialize Google Generative AI
+const genAI = process.env.GEMINI_API_KEY ? new GoogleGenerativeAI(process.env.GEMINI_API_KEY) : null;
 
 // Category mapping based on merchant names and keywords
 const categoryMappings = {
@@ -291,19 +295,28 @@ const parseReceiptText = (extractedData) => {
     /(?:date|dt)[:\s]*(\d{1,2}[-\/]\d{1,2}[-\/]\d{2,4})/i
   ];
 
-  // Extract amount
+  // Enhanced amount extraction with multiple patterns and validation
+  const amountMatches = [];
+  
+  // First pass: Try to find all potential amounts
   for (const pattern of amountPatterns) {
-    const matches = text.match(pattern);
-    if (matches) {
-      let extractedAmount = matches[1] || matches[0];
+    const regex = new RegExp(pattern, 'gi');
+    let match;
+    while ((match = regex.exec(text)) !== null) {
+      let extractedAmount = match[1] || match[0];
       extractedAmount = extractedAmount.replace(/[^\d.,]/g, '').replace(/,/g, '');
       const numAmount = parseFloat(extractedAmount);
       
-      if (numAmount && numAmount > 0 && numAmount < 100000) { // Reasonable range
-        amount = numAmount;
-        break;
+      // Only consider reasonable amounts
+      if (numAmount && numAmount > 0 && numAmount < 100000) {
+        amountMatches.push(numAmount);
       }
     }
+  }
+  
+  // If we found multiple amounts, use the highest one (often the total)
+  if (amountMatches.length > 0) {
+    amount = Math.max(...amountMatches);
   }
 
   // Extract date
@@ -341,17 +354,32 @@ const parseReceiptText = (extractedData) => {
     }
   }
 
+  // Calculate confidence based on extracted data
+  let confidence = 0;
+  if (amount) confidence += 40;
+  if (merchant) confidence += 20;
+  if (date) confidence += 10;
+  if (items.length > 0) confidence += 10;
+  
+  // If we have extraction info, factor it into confidence
+  if (extractedData?.confidence) {
+    confidence = Math.round((confidence * 0.7) + (extractedData.confidence * 0.3));
+  }
+  
   return {
     amount,
     merchant,
     date,
     items,
     rawText: text,
-    extractionInfo: extractedData.confidence ? {
-      confidence: extractedData.confidence,
-      method: extractedData.method,
-      qualityInfo: extractedData.qualityInfo
-    } : null
+    confidence,
+    extractionInfo: {
+      confidence: extractedData?.confidence || confidence,
+      method: extractedData?.method || 'manual',
+      qualityInfo: extractedData?.qualityInfo || {},
+      extractedAmounts: amountMatches,
+      extractionWarnings: !amount ? ['Could not extract amount from receipt'] : []
+    }
   };
 };
 
@@ -388,19 +416,101 @@ const calculateOverallConfidence = (parsed) => {
   return Math.min(score, 100);
 };
 
-// Main function to process receipt with enhanced blur handling
+// Extract text using Gemini Vision API
+const extractTextWithGemini = async (filePath, mimeType) => {
+  if (!genAI) {
+    throw new Error('Gemini API key not configured');
+  }
+
+  try {
+    console.log('Attempting to extract text with Gemini...');
+    const model = genAI.getGenerativeModel({ model: 'gemini-pro-vision' });
+    
+    // Read file data
+    const imageData = await fs.readFile(filePath);
+    const base64Data = imageData.toString('base64');
+    
+    const prompt = `Extract the following information from this receipt in JSON format with these fields: {"amount": number, "merchant": string, "date": string (YYYY-MM-DD), "items": string[]}. Only respond with the JSON object, no other text.`;
+    
+    const result = await model.generateContent([
+      prompt,
+      {
+        inlineData: {
+          data: base64Data,
+          mimeType: mimeType
+        }
+      }
+    ]);
+    
+    const response = await result.response;
+    const text = response.text();
+    
+    // Try to parse the response as JSON
+    try {
+      const parsed = JSON.parse(text);
+      return {
+        text: JSON.stringify(parsed), // Store the raw JSON as text
+        confidence: 90, // High confidence for Gemini
+        method: 'gemini-vision',
+        parsedData: parsed // Store the parsed data for easier access
+      };
+    } catch (e) {
+      // If parsing fails, return the raw text
+      return {
+        text: text,
+        confidence: 70,
+        method: 'gemini-vision',
+        rawResponse: text
+      };
+    }
+  } catch (error) {
+    console.error('Gemini API error:', error);
+    throw new Error(`Gemini API failed: ${error.message}`);
+  }
+};
+
+// Main function to process receipt with enhanced blur handling and Gemini fallback
 const processReceipt = async (filePath, mimeType = 'image/jpeg') => {
   try {
     // Check if file exists
     await fs.access(filePath);
     
     let extractedData;
+    let usedFallback = false;
     
-    // Extract text based on file type
-    if (mimeType === 'application/pdf') {
-      extractedData = await extractTextFromPDF(filePath);
-    } else {
-      extractedData = await extractTextFromImageEnhanced(filePath);
+    // First attempt with Tesseract
+    try {
+      // Extract text based on file type
+      if (mimeType === 'application/pdf') {
+        extractedData = await extractTextFromPDF(filePath);
+      } else {
+        extractedData = await extractTextFromImageEnhanced(filePath);
+      }
+      
+      // If Tesseract returns low confidence or no text, try Gemini
+      if ((extractedData.confidence < 50 || !extractedData.text || extractedData.text.trim().length < 20) && genAI) {
+        console.log('Low confidence in Tesseract, falling back to Gemini...');
+        try {
+          const geminiData = await extractTextWithGemini(filePath, mimeType);
+          extractedData = geminiData;
+          usedFallback = true;
+        } catch (geminiError) {
+          console.warn('Gemini fallback failed, using Tesseract results:', geminiError.message);
+        }
+      }
+    } catch (tesseractError) {
+      console.warn('Tesseract extraction failed, trying Gemini...', tesseractError.message);
+      if (genAI) {
+        try {
+          extractedData = await extractTextWithGemini(filePath, mimeType);
+          usedFallback = true;
+        } catch (geminiError) {
+          console.error('Both Tesseract and Gemini failed:', geminiError.message);
+          throw new Error('Failed to extract text with both Tesseract and Gemini');
+        }
+      } else {
+        throw tesseractError;
+      }
     }
     
     if (!extractedData.text || extractedData.text.trim().length === 0) {
@@ -408,13 +518,29 @@ const processReceipt = async (filePath, mimeType = 'image/jpeg') => {
     }
 
     // Parse the extracted text
-    const parsed = parseReceiptText(extractedData);
+    let parsed;
+    if (usedFallback && extractedData.parsedData) {
+      // If we used Gemini and got parsed data, use it directly
+      parsed = extractedData.parsedData;
+      parsed.rawText = extractedData.text;
+      // Ensure required fields
+      parsed.amount = parsed.amount || null;
+      parsed.merchant = parsed.merchant || null;
+      parsed.date = parsed.date ? new Date(parsed.date) : null;
+      parsed.items = parsed.items || [];
+    } else {
+      // Otherwise, use the existing parser
+      parsed = parseReceiptText(extractedData);
+    }
     
+    // Instead of throwing an error, we'll include the warning in the result
+    // This allows the user to manually enter the amount if needed
     if (!parsed.amount) {
-      const errorMsg = extractedData.confidence < 50 
-        ? 'Could not extract amount from receipt. The image quality may be too poor for accurate text recognition.'
-        : 'Could not extract amount from receipt. Please ensure the receipt contains clear pricing information.';
-      throw new Error(errorMsg);
+      parsed.extractionInfo.extractionWarnings.push(
+        'Could not extract amount from receipt. Please enter it manually.'
+      );
+      // Set a default amount of 0 to prevent validation errors
+      parsed.amount = 0;
     }
 
     // Determine category
@@ -443,7 +569,8 @@ const processReceipt = async (filePath, mimeType = 'image/jpeg') => {
       extractionDetails: {
         ocrConfidence: extractedData.confidence,
         method: extractedData.method,
-        qualityInfo: extractedData.qualityInfo
+        qualityInfo: extractedData.qualityInfo,
+        usedFallback: usedFallback
       }
     };
 

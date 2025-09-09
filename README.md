@@ -27,28 +27,92 @@ A production-ready, full-stack application that revolutionizes personal finance 
 - **Custom Categories & Tags** - Create personalized categories and tags for better organization
 - **Automated Bill Payments** - Set up and manage recurring payments with autopay functionality
 
-### 🤖 Receipt Processing
-- **Advanced OCR Technology** - Utilizes Tesseract.js for accurate text extraction from receipts
-- **Smart Data Extraction** - Automatically identifies merchant names, amounts, dates, and items
+### 🤖 Advanced Receipt Processing
+- **Dual OCR Engine** - Combines Tesseract.js with Google's Gemini Vision API for optimal text extraction
+  - **Primary**: Tesseract.js with custom image preprocessing for standard receipts
+  - **Fallback**: Google Gemini Vision API for challenging images with poor quality or complex layouts
+- **Smart Data Extraction** - Automatically identifies:
+  - Merchant names and contact information
+  - Transaction amounts and currency
+  - Purchase dates and times
+  - Line items and quantities
+  - Tax and tip amounts
 - **PDF Statement Import** - Bulk import transactions from bank statements and credit card PDFs
-- **Receipt Image Enhancement** - Automatic image preprocessing for better OCR accuracy
+- **Intelligent Image Processing**:
+  - Automatic quality assessment and enhancement
+  - Adaptive preprocessing for low-quality images
+  - Blur detection and correction
+  - Multi-pass OCR with confidence scoring
 
 ### 📊 Advanced Analytics
 - **Interactive Dashboards** - Real-time visualization of financial data
 - **Custom Reports** - Generate detled financial reports with custom date ranges
 - **Category Analytics** - Deep dive into spending patterns by category
 
-### 🧠 AI Features (GenAI)
-- **AI Chat Assistant**: Interactive chat interface powered by OpenAI that helps users understand their finances, answer questions about transactions, and provide personalized financial advice.
-- **AI Financial Insights**: Analyzes the last 30 days of transactions and generates a structured report with Spending Patterns, High Expenditure Areas, Savings Opportunities, and Budget Recommendations. Output is rendered as Markdown in the UI with headings, lists, and bold text.
-- **Personalized Financial Advice**: Produces tailored recommendations based on recent income/expense mix, savings rate, and category breakdown.
-- **Receipt OCR + LLM Analysis**: OCR extracts amount, category, description, and date from uploaded receipts to prefill transactions; optional LLM analysis highlights merchant/category/tax flags.
-- **Category Suggestion (capability)**: Smart category suggestion via LLM is available and can be integrated into the add-transaction flow.
+### 🧠 AI-Powered Financial Intelligence
 
-> Implementation details: 
-> - **AI Chat**: Powered by OpenAI's GPT models with context-aware responses based on user's financial data.
-> - **Financial Analysis**: Uses Google Gemini (primary: `gemini-1.5-pro`, fallback: `gemini-1.5-flash`) with retry/backoff and model fallback for quota/rate-limits. 
-> - **Currency Formatting**: Prompts enforce Indian Rupee (₹/INR) formatting; frontend renders AI output as Markdown via `react-markdown` + `remark-gfm`.
+#### 🤖 AI Chat Assistant
+- **Context-Aware Conversations**: Understands financial context and transaction history
+- **Multi-turn Dialogues**: Maintains conversation context for follow-up questions
+- **Smart Intent Recognition**: Identifies user intents like spending analysis, bill inquiries, and financial advice
+- **Personalized Responses**: Tailors responses based on user's transaction patterns and goals
+
+#### 📊 AI Financial Insights
+- **30-Day Transaction Analysis**: Comprehensive review of recent financial activity
+- **Structured Reports** with:
+  - Spending Patterns and Trends
+  - High Expenditure Areas with Visualizations
+  - Personalized Savings Opportunities
+  - Actionable Budget Recommendations
+- **Markdown Formatting**: Clean, readable output with proper formatting
+
+#### 💡 Personalized Financial Advice
+- **Income/Expense Analysis**: Breakdown of spending vs. income
+  - Savings Rate Calculation
+  - Category-wise Spending Distribution
+  - Anomaly Detection (unusual spending patterns)
+- **Tailored Recommendations**:
+  - Budget Optimization
+  - Cost-saving Opportunities
+  - Financial Goal Planning
+
+#### 🧾 Smart Receipt Processing
+- **Multi-Model OCR Pipeline**:
+  - **Tesseract.js**: Primary OCR engine with custom preprocessing
+  - **Gemini Vision API**: Fallback for complex receipts with superior layout understanding
+- **Structured Data Extraction**:
+  - Merchant Information
+  - Line Items with Quantities
+  - Tax and Tip Breakdowns
+  - Transaction Metadata
+- **Confidence Scoring**: Each extracted field includes a confidence score
+- **Automatic Validation**: Cross-verification of extracted amounts and dates
+
+#### 🔄 Smart Category Management
+- **Automated Categorization**:
+  - Machine Learning-based category prediction
+  - Merchant-based category mapping
+  - Transaction pattern analysis
+- **Learning System**: Improves suggestions based on user corrections
+- **Custom Category Support**: Full flexibility for user-defined categories
+
+> **Implementation Details**
+> - **AI Models**:
+>   - **Primary**: OpenAI GPT-4 for chat and analysis
+>   - **Vision**: Google Gemini (`gemini-1.5-pro` and `gemini-1.5-flash` fallback)
+> - **OCR Pipeline**:
+>   - Image Quality Assessment
+>   - Adaptive Preprocessing
+>   - Multi-engine Fallback System
+>   - Confidence-based Result Selection
+> - **Performance**:
+>   - Automatic Retry with Exponential Backoff
+>   - Rate Limit Handling
+>   - Caching of Common Queries
+> - **Localization**:
+>   - Indian Rupee (₹/INR) Support
+>   - Regional Date/Number Formats
+>   - Localized Merchant Recognition
 
 ### 🔒 Enterprise-Grade Security
 - **JWT Authentication** - Secure token-based authentication system
@@ -81,12 +145,22 @@ A production-ready, full-stack application that revolutionizes personal finance 
 - **Database**: MongoDB with Mongoose ODM for flexible data modeling
 - **Authentication**: JWT with refresh token rotation and OAuth 2.0 support
 - **Scheduled Jobs**: Node-cron for managing recurring payments and autopay functionality
-- **AI Integration**: OpenAI API integration for natural language processing and financial insights
-- **File Processing:**
-  - Tesseract.js v4.1 for advanced OCR capabilities
-  - Sharp v0.34 for image optimization
-  - Multer for efficient file uploads
-  - PDF-parse for statement processing
+- **AI Integration**: 
+  - OpenAI API for natural language processing and chat
+  - Google Gemini API for advanced vision and fallback processing
+- **File Processing Pipeline**:
+  - **OCR Processing**:
+    - Tesseract.js v4.1 for primary OCR
+    - Google Gemini Vision API as fallback
+    - Multi-pass processing with confidence scoring
+  - **Image Processing**:
+    - Sharp v0.34 for image optimization
+    - Automatic quality enhancement
+    - Blur detection and correction
+  - **Document Handling**:
+    - Multer for efficient file uploads
+    - PDF-parse for statement processing
+    - Batch processing support
 - **Security:**
   - Helmet for enhanced API security
   - Express-rate-limit for DDoS protection
