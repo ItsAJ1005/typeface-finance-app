@@ -18,6 +18,11 @@ A production-ready, full-stack application that revolutionizes personal finance 
 [![Live Site](https://img.shields.io/badge/🌐_VISIT_LIVE_SITE-FF4757?style=for-the-badge&logo=google-chrome&logoColor=white&labelColor=000000)](https://typeface-finance-app.vercel.app/)
 ### 📷 **Demo Video (click on below image for demo video)**
 [![Watch the video](https://pasteimg.com/images/2025/09/09/finance-tracker-home.jpg)](https://drive.google.com/file/d/1_jS_55DXUMscizPXFJKCFeEOq0cCZ0-X/view?usp=sharing)
+
+
+## 🏗 Architecture
+<img width="1767" height="916" alt="image" src="https://github.com/user-attachments/assets/90966ab5-ccbc-44e2-a49b-51648146a030" />
+
 ## 🚀 Key Features
 
 ### 💡 Smart Financial Management
